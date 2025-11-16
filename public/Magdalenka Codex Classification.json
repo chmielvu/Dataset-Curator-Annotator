@@ -1,0 +1,1166 @@
+
+{
+  "manifest_version": "1.0",
+  "project": "Magdalenka",
+  "namespace": "magdalenka.codex",
+  "language": "pl",
+  "created_at": "2025-10-31",
+  "labels": {
+    "tactics": [
+      {
+        "id": "tactic_loaded_language",
+        "name": "Loaded Language",
+        "definition": "Słownictwo nacechowane emocjonalnie użyte w celu wpłynięcia na percepcję odbiorcy.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Neutralne, opisowe sformułowanie bez emocjonalnego zabarwienia.",
+            "Faktyczna informacja o wydarzeniu bez oceny.",
+            "Proste, rzeczowe stwierdzenie daty i miejsca."
+          ],
+          "0.25": [
+            "Delikatne nacechowanie pozytywne lub negatywne.",
+            "Sformułowanie z łagodną sugestią oceny.",
+            "Użycie lekko wartościującego epitetu."
+          ],
+          "0.5": [
+            "Wyraźne, wartościujące określenie (np. \"skandal\", \"bohater\").",
+            "Frazy mające wpływ na emocje czy ocenę.",
+            "Umiarkowanie silnie nacechowane wyrażenia."
+          ],
+          "0.75": [
+            "Jasne, intensywne słowa mające wzbudzić reakcję (np. \"zdrajcy\").",
+            "Sformułowania jednostronne i nacechowane negatywnie/pozytywnie.",
+            "Język retoryczny, silnie eksponujący ocenę."
+          ],
+          "1.0": [
+            "Skrajnie emocjonalne lub dehumanizujące sformułowania.",
+            "Obraźliwe epitety, wywołujące silny gniew lub pogardę.",
+            "Sformułowania mające na celu wywołać impulsywną reakcję."
+          ]
+        }
+      },
+      {
+        "id": "tactic_dog_whistling",
+        "name": "Dog Whistling",
+        "definition": "Użycie zakodowanych lub dwoistych komunikatów rozumianych szczególnie przez wybraną podgrupę.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak ukrytych znaczeń; dosłowny przekaz.",
+            "Jasna komunikacja bez kontekstowych aluzji.",
+            "Informacja o polityce bez kodów."
+          ],
+          "0.25": [
+            "Możliwa aluzja, niewystarczająco silna aby uznać za dog whistle.",
+            "Słabo ukierunkowana metafora.",
+            "Subtelna dwuznaczność bez kontekstu wskazującego grupę docelową."
+          ],
+          "0.5": [
+            "Wyraźna, lecz nie jednoznaczna aluzja do określonej grupy.",
+            "Fraza rozumiana inaczej przez specyficzny odbiorczy krąg.",
+            "Elementy kodu językowego potrzebujące kontekstu."
+          ],
+          "0.75": [
+            "Jasne zakodowane odniesienie rozpoznawalne dla grupy docelowej.",
+            "Słowa lub symbole z historią użycia wobec konkretnej grupy.",
+            "Aluzje z dużym prawdopodobieństwem wskazania podgrupy."
+          ],
+          "1.0": [
+            "Wyraźne kodowane wezwanie lub komunikat dla konkretnej grupy.",
+            "Fraza o ustalonym znaczeniu w danym kręgu politycznym.",
+            "Komunikat z intencją zidentyfikowania/zmobilizowania określonej grupy."
+          ]
+        }
+      },
+      {
+        "id": "tactic_scapegoating",
+        "name": "Scapegoating",
+        "definition": "Przypisywanie złożonych problemów konkretnemu aktorowi lub grupie jako źródłu winy.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak wskazywania winnych; opis problemu bez obwiniania.",
+            "Analiza problemu z neutralnym rozkładem przyczyn.",
+            "Faktyczne raportowanie bez wskazania winy."
+          ],
+          "0.25": [
+            "Delikatne sugerowanie, że jakaś grupa może mieć wpływ.",
+            "Niewyraźne insynuacje wobec podmiotów.",
+            "Słabe przypisanie odpowiedzialności."
+          ],
+          "0.5": [
+            "Wyraźne sugestie obwiniania grupy za problem.",
+            "Framing wskazujący winę, ale bez silnego języka emocjonalnego.",
+            "Sformułowania kierujące oskarżenia wobec grupy."
+          ],
+          "0.75": [
+            "Silne oskarżenia i jednoznaczne przypisywanie zła danej grupie.",
+            "Wezwania do działań przeciwko grupie jako rozwiązania.",
+            "Retoryka ustawiająca grupę jako główny sprawca."
+          ],
+          "1.0": [
+            "Skrajne dehumanizowanie grupy i apelowanie do represji/kary.",
+            "Jasne wskazanie grupy jako źródła wszystkich problemów.",
+            "Wezwania do wykluczenia, karania lub eliminacji wpływu grupy."
+          ]
+        }
+      },
+      {
+        "id": "tactic_appeal_to_fear",
+        "name": "Appeal to Fear",
+        "definition": "Komunikacja świadomie wzmacniająca poczucie zagrożenia lub niepewności by zmobilizować lub zmusić do działania.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak elementów strachu; informacja spokojna.",
+            "Opisy zagrożeń bez nacechowania emocjonalnego.",
+            "Neutralne ostrzeżenie przy niskim natężeniu."
+          ],
+          "0.25": [
+            "Delikatne podkreślenie ryzyka bez dramatyzowania.",
+            "Sugerowanie możliwych negatywnych konsekwencji.",
+            "Ostrzeżenia z umiarkowanym tonem."
+          ],
+          "0.5": [
+            "Wyraźne budowanie obawy o bezpieczeństwo lub dobrobyt.",
+            "Opis zagrożeń jako realnych i prawdopodobnych.",
+            "Użycie przykładów zwiększających niepokój."
+          ],
+          "0.75": [
+            "Intensywne eksponowanie zagrożeń, scenariusze katastroficzne.",
+            "Jasne wezwania do ochronnych działań z motywacją strachem.",
+            "Retoryka alarmistyczna mająca zmobilizować odbiorców."
+          ],
+          "1.0": [
+            "Skrajna panika lub dehumanizujący obraz zagrożenia.",
+            "Wezwania do radykalnych środków opartych na strachu.",
+            "Obrazy i metafory mające wzbudzić panikę i wrogość."
+          ]
+        }
+      },
+      {
+        "id": "tactic_appeal_to_pride",
+        "name": "Appeal to Pride/Patriotism",
+        "definition": "Odwołanie do dumy narodowej, tożsamości grupowej lub pozytywnych aspektów przynależności w celu wsparcia przekazu.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odwołań do tożsamości grupowej lub dumy.",
+            "Neutralne odniesienia do instytucji bez emocji.",
+            "Czysto informacyjne stwierdzenia."
+          ],
+          "0.25": [
+            "Delikatne pozytywne odniesienia do kraju lub wartości.",
+            "Niewielkie eksponowanie pozytywnych cech grupy.",
+            "Subtelne budowanie tożsamości."
+          ],
+          "0.5": [
+            "Wyraźne apele do dumy narodowej lub przynależności.",
+            "Sformułowania celebrujące grupę lub osiągnięcia.",
+            "Umiarkowane retoryczne odwołania do patriotyzmu."
+          ],
+          "0.75": [
+            "Silne pobudzanie dumy, kontrast z wrogami lub zagrożeniami.",
+            "Wezwania do obrony honoru narodowego.",
+            "Narracje gloryfikujące wspólnotę i tradycję."
+          ],
+          "1.0": [
+            "Ekstremalne naciski na nacjonalistyczne emocje i wykluczenie innych.",
+            "Slogany i obrazy pełne mitologii narodowej w celu mobilizacji.",
+            "Apel do pełnej identyfikacji z narodem kosztem pluralizmu."
+          ]
+        }
+      },
+      {
+        "id": "tactic_appeal_to_authority",
+        "name": "Appeal to Authority",
+        "definition": "Uwierzytelnianie twierdzeń poprzez odwołanie do autorytetów, ekspertów lub instytucji w celu legitymizacji przekazu.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odwołań do autorytetów; argumenty oparte na dowodach.",
+            "Cytaty rzecznika bez sugerowania ostateczności.",
+            "Opis relacji faktów bez autorytetów."
+          ],
+          "0.25": [
+            "Lekkie wsparcie przez nazwiska lub instytucje bez nacisku.",
+            "Cytowanie eksperta w celu uzupełnienia informacji.",
+            "Autorytet przytaczany informacyjnie."
+          ],
+          "0.5": [
+            "Wyraźne użycie autorytetu do poparcia twierdzenia.",
+            "Argument odwołujący się do pozycji eksperta jako ważny.",
+            "Sugerowanie, że autorytety rozstrzygają kwestię."
+          ],
+          "0.75": [
+            "Silne poleganie na autorytecie i prezentowanie go jako niepodważalnego.",
+            "Odwołania mające na celu zakończyć dyskusję.",
+            "Wykorzystywanie prestiżu instytucji jako głównego dowodu."
+          ],
+          "1.0": [
+            "Instrumentalizacja autorytetów do stłumienia kontrargumentów.",
+            "Fałszywe lub zmanipulowane cytaty dla zwiększenia wiarygodności.",
+            "Autorytety używane do legitymizacji nadużyć."
+          ]
+        }
+      },
+      {
+        "id": "tactic_gaslighting",
+        "name": "Gaslighting",
+        "definition": "Kwestionowanie rzeczywistości, faktów lub doświadczeń w celu zdezorientowania i zdyskredytowania ofiar.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Rzetelne relacje faktów bez zaprzeczania doświadczeniom.",
+            "Brak podważania relacji uczestników.",
+            "Neutralne przedstawienie wydarzeń."
+          ],
+          "0.25": [
+            "Delikatne podważanie interpretacji bez wyraźnego ataku.",
+            "Sugestia alternatywnych interpretacji bez agresji.",
+            "Niewielkie wątpliwości co do sensowności twierdzeń."
+          ],
+          "0.5": [
+            "Wyraźne kwestionowanie prawdziwości doświadczeń innych.",
+            "Podważanie dowodów lub intencji ofiar.",
+            "Insynuacje, że świadkowie są nieuczciwi lub przesadzają."
+          ],
+          "0.75": [
+            "Systematyczne zaprzeczanie faktom, zmienianie narracji.",
+            "Używanie manipulacji językowej do dezorientacji.",
+            "Próby zdyskredytowania wiarygodności źródeł."
+          ],
+          "1.0": [
+            "Zorganizowana kampania zaprzeczająca faktom i niszcząca reputacje.",
+            "Używanie dezinformacji i powtarzanie kłamstw w celu trwałego zafałszowania narracji.",
+            "Skoordynowane działania mające zrujnować zaufanie do ofiar."
+          ]
+        }
+      },
+      {
+        "id": "tactic_straw_man",
+        "name": "Straw Man / Misrepresentation",
+        "definition": "Fałszywe przedstawienie stanowiska oponenta w sposób łatwiejszy do zaatakowania.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Dokładne parafrazowanie stanowiska oponenta bez zniekształceń.",
+            "Cytowanie w kontekście i wierne przedstawienie intencji.",
+            "Uczciwa analiza argumentów drugiej strony."
+          ],
+          "0.25": [
+            "Delikatne upraszczanie argumentu oponenta.",
+            "Uproszczenie racji w sposób nieistotny dla sedna sprawy.",
+            "Lekka generalizacja bez intencjonalnego zniekształcenia."
+          ],
+          "0.5": [
+            "Wyraźne przeinaczanie kluczowych elementów stanowiska oponenta.",
+            "Parafraza zmieniająca znaczenie oryginalnej tezy.",
+            "Podawanie uproszczonej wersji jako reprezentatywnej."
+          ],
+          "0.75": [
+            "Konstrukcja skrajnie zniekształconego argumentu, aby łatwiej go obalić.",
+            "Celowe pomijanie istotnych elementów stanowiska oponenta.",
+            "Atakowanie zbudowanego na miarę 'słomianego' argumentu."
+          ],
+          "1.0": [
+            "Kreowanie całkowicie fałszywego stanowiska i jego publiczne obalanie.",
+            "Wprowadzanie zmyślonych cytatów lub intencji w celu dyskredytacji.",
+            "Systematyczne manipulowanie wypowiedziami w narracji publicznej."
+          ]
+        }
+      },
+      {
+        "id": "tactic_ad_hominem",
+        "name": "Ad Hominem / Personal Attack",
+        "definition": "Atakowanie osoby zamiast jej argumentów, celem zdyskredytowania rozmówcy.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Krytyka merytoryczna bez odniesień do cech osobistych.",
+            "Analiza argumentów bez uwag o charakterze osoby.",
+            "Obiektywne wskazanie błędów logicznych."
+          ],
+          "0.25": [
+            "Lekka uwaga o cechach osoby obok meritum dyskusji.",
+            "Komentarz dotyczący stylu wypowiedzi, nie istoty argumentu.",
+            "Subtelne oceny osoby bez obraźliwego tonu."
+          ],
+          "0.5": [
+            "Wyraźne uwagi o cechach osobistych mające podważyć wiarygodność.",
+            "Sugestie o niekompetencji lub złych intencjach.",
+            "Ataki mniej obraźliwe, lecz skierowane przeciw osobie."
+          ],
+          "0.75": [
+            "Ostentacyjne oczernianie osoby, obraźliwe epitetowanie.",
+            "Poniżanie cech osobowych w celu zdyskredytowania.",
+            "Ataki używane zamiast argumentów merytorycznych."
+          ],
+          "1.0": [
+            "Grube, obrzydliwe personalne ataki w celu zniszczenia reputacji.",
+            "Wezwania do publicznego upokorzenia, kary lub wykluczenia.",
+            "Mowa nienawiści skierowana przeciwko osobie lub grupie."
+          ]
+        }
+      },
+      {
+        "id": "tactic_false_dichotomy",
+        "name": "False Dichotomy",
+        "definition": "Przedstawianie sytuacji jako wyboru między wyłącznymi opcjami, ignorując alternatywy.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Prezentacja wielowymiarowych rozwiązań bez binarnego ograniczenia.",
+            "Analiza uwzględniająca kilka opcji.",
+            "Unikanie uproszczeń typu 'albo --- albo'."
+          ],
+          "0.25": [
+            "Sugerowanie ograniczonego wyboru, ale bez mocnego wykluczenia opcji.",
+            "Lekka tendencja do upraszczania opcji.",
+            "Niewielkie sugestie dwudzielności."
+          ],
+          "0.5": [
+            "Wyraźne przedstawienie dwóch opcji jako jedynych możliwych.",
+            "Pomijanie realistycznych alternatyw.",
+            "Argumentacja zmuszająca do wyboru między skrajnymi opcjami."
+          ],
+          "0.75": [
+            "Systematyczne uciskanie dyskursu w binarne ramy.",
+            "Retoryka ułatwiająca polaryzację wyboru.",
+            "Wykorzystywanie fałszywych opozycji w celu mobilizacji."
+          ],
+          "1.0": [
+            "Całkowite wykluczenie pluralizmu i konsekwentne narzucanie jedynego wyboru.",
+            "Manipulacja mająca zniekształcić debatę publiczną poprzez ograniczanie opcji.",
+            "Strategiczne tworzenie wrażenia, że tylko dwie opcje istnieją."
+          ]
+        }
+      },
+      {
+        "id": "tactic_whataboutism",
+        "name": "Whataboutism",
+        "definition": "Odwracanie uwagi przez wskazanie rzekomych przewin innych, zamiast odpowiedzi na zarzut.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Bez defleksji; bez wskazania innych wad.",
+            "Odpowiedź merytoryczna na zarzuty.",
+            "Udzielenie bezpośredniej odpowiedzi na pytanie."
+          ],
+          "0.25": [
+            "Niewielkie odwołanie do porównań historycznych lub kontekstowych.",
+            "Sugerowanie analogii, ale nie pełne odwrócenie uwagi.",
+            "Porównania użyte dla kontekstu."
+          ],
+          "0.5": [
+            "Wyraźne odwrócenie dyskusji przez wskazanie innego przypadku.",
+            "Użycie kontrargumentu polegającego na porównaniu win.",
+            "Próba relatywizacji zarzutów poprzez inne przykłady."
+          ],
+          "0.75": [
+            "Systematyczne przerzucanie uwagi na innych sprawców lub błędy.",
+            "Unikanie odpowiedzi poprzez przywoływanie niezwiązanych zarzutów.",
+            "Defleksja jako główna strategia argumentacyjna."
+          ],
+          "1.0": [
+            "Stałe i sfałszowane przywoływanie przypadków w celu anulowania krytyki.",
+            "Używanie 'whataboutism' jako podstawowego mechanizmu obronnego.",
+            "Ignorowanie meritum przez permanentne odwracanie uwagi."
+          ]
+        }
+      },
+      {
+        "id": "tactic_astroturfing",
+        "name": "Astroturfing / Coordinated Inauthenticity",
+        "definition": "Sztuczne tworzenie wrażenia oddolnego poparcia lub koordynowane działania dezorientujące autentyczny dyskurs.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak oznak koordynacji; autentyczne, niezależne wpisy.",
+            "Różnorodne, niepowiązane źródła wypowiedzi.",
+            "Naturalne wzorce dyskusji."
+          ],
+          "0.25": [
+            "Możliwe wskazówki koordynacji (podobne frazy), ale niepewne.",
+            "Powtarzające się, lecz sporadyczne motywy.",
+            "Nieliczne wspólne elementy bez jasnej koordynacji."
+          ],
+          "0.5": [
+            "Wyraźne powtarzanie treści i podobne konta wskazujące koordynację.",
+            "Regularne wzorce publikacji zgodne z kampanią.",
+            "Szczególne powtarzające frazy z wielu źródeł."
+          ],
+          "0.75": [
+            "Silne wskazania zorganizowanej kampanii (boty, powiązane konta).",
+            "Skoordynowany push tematu w różnych kanałach.",
+            "Wysoki stopień podobieństwa treści i czasów publikacji."
+          ],
+          "1.0": [
+            "Wyraźna, potwierdzona kampania astroturfingowa sterowana centralnie.",
+            "Dowody na inauthentyczność i sterowane konta.",
+            "Koordynacja obejmująca manipulację algorytmami i masową amplifikację."
+          ]
+        }
+      },
+      {
+        "id": "tactic_firehose_gish",
+        "name": "Firehose of Falsehood / Gish Gallop",
+        "definition": "Zalewanie odbiorcy masą słabych, sprzecznych lub błędnych twierdzeń by zmęczyć kontrargumenty.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Krótkie, precyzyjne twierdzenia z wsparciem dowodowym.",
+            "Argumenty ograniczone i rzeczowe.",
+            "Brak nadmiernej ilości rozproszonych twierdzeń."
+          ],
+          "0.25": [
+            "Lekkie zwiększenie liczby przykładów bez nadmiernego chaosu.",
+            "Kilka dodatkowych, powiązanych twierdzeń.",
+            "Umiarkowane wykorzystanie przykładów."
+          ],
+          "0.5": [
+            "Wielowątkowe twierdzenia utrudniające natychmiastową refutację.",
+            "Sporo argumentów o niskiej jakości lub powtarzających się.",
+            "Zwiększone tempo przekazu informacji."
+          ],
+          "0.75": [
+            "Duża ilość sprzecznych lub słabych twierdzeń stosowana strategicznie.",
+            "Celowe przytłoczenie ilością treści.",
+            "Utrudnianie kontr-dyskusji przez ilość."
+          ],
+          "1.0": [
+            "Intencjonalne bombardowanie publiczności setkami fałszywych lub manipulacyjnych twierdzeń.",
+            "Kampanie projektowane, by uniemożliwić odpowiadanie na wszystkie zarzuty.",
+            "Systematyczne stosowanie techniki w komunikacji politycznej."
+          ]
+        }
+      },
+      {
+        "id": "tactic_algorithmic_gaming",
+        "name": "Algorithmic Gaming",
+        "definition": "Działania zaprojektowane do manipulowania systemów rekomendacyjnych i widoczności treści w mediach społecznościowych.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak działań wskazujących optymalizację pod algorytm.",
+            "Naturalne wzorce publikacji bez manipulacyjnych technik.",
+            "Różnorodność treści i czasów publikacji."
+          ],
+          "0.25": [
+            "Możliwe eksperymentalne zachowania optymalizacyjne bez wyraźnej koordynacji.",
+            "Użycie popularnych hashtagów w kontekście informacyjnym.",
+            "Nieliczne próby zwiększenia zasięgu bez ewidentnego wzorca."
+          ],
+          "0.5": [
+            "Wyraźne stosowanie technik SEO/hashtagów i rytmu publikacji w celu zwiększenia dotarcia.",
+            "Powtarzające się strategie optymalizacyjne obserwowane w treściach.",
+            "Organizowane próby zwiększenia polecenia treści."
+          ],
+          "0.75": [
+            "Skuteczne, powtarzalne techniki manipulujące rekomendacjami platform.",
+            "Kampanie publikacyjne zaprojektowane pod algorytm.",
+            "Używanie metatekstów i struktur mających wpłynąć na ranking."
+          ],
+          "1.0": [
+            "Zaawansowane, stale optymalizowane działania obejmujące A/B testy, boty i skrypty.",
+            "Systemowe manipulacje widocznością treści na poziomie platformy.",
+            "Koordynowane działania inżynierskie mające na celu oszukanie mechanizmów rekomendacji."
+          ]
+        }
+      },
+      {
+        "id": "tactic_narrative_hijacking",
+        "name": "Narrative Hijacking / Concept Hijacking",
+        "definition": "Przejęcie lub przedefiniowanie pojęć i narracji w celu zmiany ich pierwotnego znaczenia.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Użycie pojęć w zgodzie z ich powszechnym znaczeniem.",
+            "Brak prób redefinicji terminów.",
+            "Kontekst zgodny z ogólnie przyjętymi definicjami."
+          ],
+          "0.25": [
+            "Drobne przesunięcia znaczenia bez jawnej reinterpretacji.",
+            "Eksperymenty językowe o niskim wpływie.",
+            "Subtelne budowanie nowego kontekstu dla pojęcia."
+          ],
+          "0.5": [
+            "Wyraźne próby zmiany kontekstu pojęcia w sposób strategiczny.",
+            "Reframowanie pojęć w celu legitymizacji stanowiska.",
+            "Użycie nowych znaczeń dla znanych terminów."
+          ],
+          "0.75": [
+            "Systematyczne przedefiniowywanie pojęć w narracji kampanii.",
+            "Skierowanie percepcji publicznej na alternatywne interpretacje.",
+            "Wprowadzanie nowych metafor i ramek interpretacyjnych."
+          ],
+          "1.0": [
+            "Całkowite przejęcie znaczenia kluczowych pojęć i narzucenie alternatywnej narracji.",
+            "Długotrwałe kampanie mające zmienić społeczne rozumienie terminów.",
+            "Rebranding pojęć w celu trwałego wpływu na debatę publiczną."
+          ]
+        }
+      },
+      {
+        "id": "tactic_moralization",
+        "name": "Moralization / Sanctimony",
+        "definition": "Przedstawianie problemu jako walki moralnej, stawianie własnej strony w roli moralnego autorytetu.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Dyskusja oparta na argumentach pragmatycznych, bez moralnego osądu.",
+            "Brak moralnej oceny działań.",
+            "Analiza przyczyn i skutków bez moralizowania."
+          ],
+          "0.25": [
+            "Drobne odwołania do wartości moralnych bez osądzania innych.",
+            "Wspomnienie o etycznych aspektach bez potępienia.",
+            "Umiarkowane akcentowanie norm."
+          ],
+          "0.5": [
+            "Wyraźne stawianie sprawy w kategoriach moralnych.",
+            "Oskarżenia o niemoralność wobec oponentów.",
+            "Argumenty przedstawiane jako kwestie dobra i zła."
+          ],
+          "0.75": [
+            "Silne oskarżenia moralne, demonizowanie przeciwników jako niemoralnych.",
+            "Wezwania do moralnej potępienia działań.",
+            "Postulowanie działań korygujących w imię moralności."
+          ],
+          "1.0": [
+            "Całkowita delegitymizacja przeciwnika na gruncie moralnym z apelami do wykluczenia.",
+            "Użycie silnej retoryki moralnej do usprawiedliwienia radykalnych środków.",
+            "Instrumentalizacja moralności by zniszczyć pluralizm."
+          ]
+        }
+      }
+    ],
+    "emotions": [
+      {
+        "id": "emotion_anger",
+        "name": "Anger / Outrage",
+        "definition": "Wysokie pobudzenie emocjonalne skierowane przeciw aktorom lub sytuacjom, często wzywające do działania.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak gniewu; neutralny ton.",
+            "Opis bez ładunku emocjonalnego.",
+            "Rzeczowy raport wydarzeń."
+          ],
+          "0.25": [
+            "Delikatne niezadowolenie lub irytacja.",
+            "Słabe wyrazy krytyki bez wzywania do działania.",
+            "Niewielkie emocjonalne nacechowanie."
+          ],
+          "0.5": [
+            "Wyraźna krytyka, silne wyrażenia niezadowolenia.",
+            "Użycie słów wskazujących na złość lub frustrację.",
+            "Wezwania do reakcji społecznej."
+          ],
+          "0.75": [
+            "Silny gniew; retoryka obwiniająca i mobilizująca.",
+            "Zachęcanie do protestu lub odwetu słownego.",
+            "Wyrazy intensywnej złości."
+          ],
+          "1.0": [
+            "Ekstremalny gniew, nawoływanie do przemocy lub rewanżu.",
+            "Dehumanizujące określenia i groźby.",
+            "Apel do natychmiastowej, radykalnej reakcji."
+          ]
+        }
+      },
+      {
+        "id": "emotion_resentment",
+        "name": "Resentment / Righteous Indignation",
+        "definition": "Długotrwałe poczucie krzywdy i niesprawiedliwości wobec elit lub grup.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak poczucia krzywdy; zrównoważona ocena.",
+            "Neutralne refleksje na temat polityki.",
+            "Brak historycznego lub strukturalnego kontekstu urazy."
+          ],
+          "0.25": [
+            "Lekka irytacja wynikająca z nierówności.",
+            "Niewielkie odniesienia do niesprawiedliwości.",
+            "Delikatne poczucie urazy."
+          ],
+          "0.5": [
+            "Wyraźne odniesienia do długotrwałej niesprawiedliwości.",
+            "Przywoływanie historii wykorzystywania przez elity.",
+            "Ton sugerujący narastającą urazę."
+          ],
+          "0.75": [
+            "Silne, trwale zakorzenione poczucie krzywdy i niesprawiedliwości.",
+            "Narracje o wykorzystywaniu i zdradzie przez elity.",
+            "Mobilizowanie emocji wynikających z historycznego gniewu."
+          ],
+          "1.0": [
+            "Ekstremalne, trwałe przeświadczenie o nieodwracalnej niesprawiedliwości.",
+            "Wezwania do szerokich zmian czy rewanżu wobec domniemanych winowajców.",
+            "Ugruntowana narracja o trwałej krzywdzie."
+          ]
+        }
+      },
+      {
+        "id": "emotion_fear",
+        "name": "Fear / Anxiety",
+        "definition": "Poczucie zagrożenia lub niepewności co do przyszłości, bezpieczeństwa lub dobrobytu.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak obaw; spokojne przedstawienie faktów.",
+            "Opis bez sugestii ryzyka.",
+            "Neutralne, informacyjne treści."
+          ],
+          "0.25": [
+            "Niewielka troska o przyszłość lub kwestie bezpieczeństwa.",
+            "Ostrzeżenia o możliwych problemach bez dramatyzmu.",
+            "Delikatne wskazywanie na ryzyko."
+          ],
+          "0.5": [
+            "Wyraźne wyrażanie obaw o utratę pracy, bezpieczeństwa lub stabilności.",
+            "Wskazywanie realnych zagrożeń i niepewności.",
+            "Wezwania do przygotowania się lub działań zapobiegawczych."
+          ],
+          "0.75": [
+            "Wysoki poziom lęku; opis groźnych scenariuszy.",
+            "Mobilizacja oparta na strachu o przyszłość.",
+            "Retoryka ostrzegawcza z emocjonalnym naciskiem."
+          ],
+          "1.0": [
+            "Panika, katalogowanie katastroficznych konsekwencji.",
+            "Wezwania do radykalnych środków z powodu lęku.",
+            "Ekstremalne przesłanki mające sprowokować masową reakcję."
+          ]
+        }
+      },
+      {
+        "id": "emotion_pride",
+        "name": "Pride / Prideful Identity",
+        "definition": "Silne poczucie dumy wynikające z przynależności do grupy, narodu lub idei.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odniesień do dumy; obiektywna ekspozycja faktów.",
+            "Neutralne informacje o instytucjach lub osiągnięciach.",
+            "Brak emocjonalnego podkreślenia tożsamości."
+          ],
+          "0.25": [
+            "Delikatne odniesienia do pozytywnych aspektów grupy.",
+            "Niewielkie celebracje drobnych sukcesów.",
+            "Subtelne pozytywne ramowanie."
+          ],
+          "0.5": [
+            "Wyraźne podkreślenie osiągnięć lub wartości grupowych.",
+            "Język celebrujący wspólne wartości.",
+            "Wezwania do dumy z konkretnych działań lub tradycji."
+          ],
+          "0.75": [
+            "Silne afirmacje tożsamości grupowej i dumy narodowej.",
+            "Narracje gloryfikujące kulturę lub tradycję.",
+            "Mobilizacja na podstawie poczucia wyższości grupy."
+          ],
+          "1.0": [
+            "Ekstremalna afirmacja tożsamości prowadząca do wykluczenia innych.",
+            "Slogany nacjonalistyczne i mitologizowanie przeszłości.",
+            "Apel do pełnego utożsamienia się z narodem przeciwko pluralizmowi."
+          ]
+        }
+      },
+      {
+        "id": "emotion_collective_victimhood",
+        "name": "Collective Victimhood",
+        "definition": "Poczucie wspólnotowego bycia ofiarą przeszłych lub obecnych krzywd.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak narracji o byciu ofiarą; neutralne przedstawienie historii.",
+            "Analiza historyczna bez odniesień emocjonalnych.",
+            "Opis zdarzeń bez personalizacji krzywdy."
+          ],
+          "0.25": [
+            "Niewielkie odniesienia do przykrości lub szkód historycznych.",
+            "Wspomnienia trudnych wydarzeń bez intensywnego tonu.",
+            "Delikatne przywołanie przeszłych krzywd."
+          ],
+          "0.5": [
+            "Wyraźne odwołania do krzywd i niesprawiedliwości wobec grupy.",
+            "Narracje akcentujące bycie poszkodowanym.",
+            "Przywoływanie historii w celu wykazania urazy."
+          ],
+          "0.75": [
+            "Silne budowanie narracji o długotrwałym ucisku lub prześladowaniu grupy.",
+            "Mobilizowanie emocji poprzez pamięć o krzywdach.",
+            "Ugruntowane przekonanie o byciu poszkodowanym."
+          ],
+          "1.0": [
+            "Intensywna, permanentna narracja o ofiarności prowadząca do politycznych żądań.",
+            "Apel do restytucji lub kompensacji w imię historycznej niesprawiedliwości.",
+            "Narracje mające uzasadnić radykalne działania w imię krzywdy."
+          ]
+        }
+      },
+      {
+        "id": "emotion_hope",
+        "name": "Hope / Optimism",
+        "definition": "Pozytywne, przyszłościowe oczekiwanie poprawy i konstruktywnych zmian.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak nadziei; neutralne lub pesymistyczne ujęcie.",
+            "Opisy sytuacji bez pozytywnego tonu.",
+            "Brak sygnałów oczekiwania poprawy."
+          ],
+          "0.25": [
+            "Delikatne wzmianki o możliwych poprawach.",
+            "Niewielkie sygnały optymizmu bez konkretów.",
+            "Subtelne odniesienia do przyszłych korzyści."
+          ],
+          "0.5": [
+            "Wyraźne oczekiwanie pozytywnych zmian i planów poprawy.",
+            "Sformułowania mobilizujące w duchu budowania lepszej przyszłości.",
+            "Perspektywy i plany formułowane z entuzjazmem."
+          ],
+          "0.75": [
+            "Silne, motywujące narracje o lepszej przyszłości.",
+            "Wezwania do działania oparte na przekonaniu o realnej poprawie.",
+            "Wizje transformacji i nadziei dla grupy."
+          ],
+          "1.0": [
+            "Euforia i absolutna pewność w sukces przyszłych zmian.",
+            "Ekstremalne optymistyczne zapewnienia bez krytycznego osądu.",
+            "Nadmierna idealizacja przyszłych rezultatów."
+          ]
+        }
+      },
+      {
+        "id": "emotion_frustration",
+        "name": "Frustration / Cynicism",
+        "definition": "Uczucie zniecierpliwienia i braku zaufania wobec instytucji lub systemu politycznego.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak frustracji; zaufanie lub neutralność wobec instytucji.",
+            "Obiektywna analiza polityki bez tonów cynizmu.",
+            "Opisy bez emocjonalnej krytyki."
+          ],
+          "0.25": [
+            "Lekka irytacja wobec działań instytucji.",
+            "Niewielkie oznaki nieufności wobec systemu.",
+            "Delikatne komentarze sugerujące potrzebę poprawy."
+          ],
+          "0.5": [
+            "Wyraźne zniecierpliwienie i krytyka efektywności instytucji.",
+            "Cyniczne uwagi o motywacjach polityków.",
+            "Sceptycyzm dotyczący obietnic i działań."
+          ],
+          "0.75": [
+            "Silne poczucie rozczarowania i cynizmu wobec całego systemu.",
+            "Wezwania do radykalnych zmian z uwagi na zawodność instytucji.",
+            "Głębokie rozczarowanie politycznymi aktorami."
+          ],
+          "1.0": [
+            "Głęboka apatia i odrzucenie systemu; nawoływanie do radykalnych przewrotów.",
+            "Izolujący cynizm prowadzący do rezygnacji z uczestnictwa politycznego.",
+            "Ekstremalna deziluzja i odrzucenie legitymacji systemu."
+          ]
+        }
+      },
+      {
+        "id": "emotion_grief",
+        "name": "Grief / Mourning",
+        "definition": "Smutek i żal związany z utratą, tragedią historyczną lub pamięcią o ofiarach.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak elementu żalu; neutralne relacje faktów.",
+            "Opisy bez emocjonalnego ton"
+          ],
+          "0.25": [
+            "Delikatne odniesienia do straty lub upamiętnienia.",
+            "Subtelne wyrazy współczucia bez intensywnego tonu.",
+            "Wzmianek o pamięci bez głębokiego smutku."
+          ],
+          "0.5": [
+            "Wyraźne elementy żalu i wspominania ofiar.",
+            "Teksty oddające empatię i pamięć o tragediach.",
+            "Obchody rocznic i upamiętnianie z umiarkowanym tonem."
+          ],
+          "0.75": [
+            "Silne wyrazy żalu i emocjonalne opisy strat.",
+            "Mobilizowanie narracji wokół wspólnego doświadczenia straty.",
+            "Intensywne wspomnienia i apel o pamięć."
+          ],
+          "1.0": [
+            "Głębokie, dramatyczne opisy traumy i żalu z wezwaniem do działań pamięciowych.",
+            "Silne mobilizowanie emocjonalne przez odniesienia do tragedii.",
+            "Apel do intensywnego wspólnotowego przeżywania straty."
+          ]
+        }
+      },
+      {
+        "id": "emotion_contempt",
+        "name": "Contempt",
+        "definition": "Pogarda i lekceważenie wobec określonych osób lub grup.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak pogardy; neutralne lub uprzejme sformułowania.",
+            "Obiektywne odniesienia bez lekceważenia.",
+            "Brak deprecjonującego tonu."
+          ],
+          "0.25": [
+            "Delikatne sygnały wyższości lub dezaprobaty.",
+            "Słabe uwagi podważające wartość argumentu osoby.",
+            "Subtelne komentarze o wyższości moralnej."
+          ],
+          "0.5": [
+            "Wyraźne pogardliwe sformułowania i ironia wobec grupy.",
+            "Użycie tonu lekceważącego lub pogardliwego.",
+            "Komunikaty podkreślające niższość przeciwnika."
+          ],
+          "0.75": [
+            "Silne, pełne pogardy ataki deprecjonujące grupę lub osobę.",
+            "Wyłączenie wartości przeciwnika z debaty publicznej.",
+            "Wysoki poziom cynizmu i pogardy."
+          ],
+          "1.0": [
+            "Skrajne demonizowanie i dehumanizacja skierowane przeciwko grupie.",
+            "Nawoływanie do ostracyzmu i całkowitego wyłączenia społecznego.",
+            "Retoryka pełna nienawiści i pogardy."
+          ]
+        }
+      },
+      {
+        "id": "emotion_solidarity",
+        "name": "Solidarity / Empathy",
+        "definition": "Wyrażenia identyfikacji i wsparcia dla grupy lub ofiar; zachęta do wspólnego działania.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak wyrażonego wsparcia lub identyfikacji.",
+            "Neutralne opisy sytuacji bez wezwania do solidarności.",
+            "Obiektywne informacje."
+          ],
+          "0.25": [
+            "Drobne sygnały wsparcia lub współczucia.",
+            "Wyrazy uznania bez wezwań do działania.",
+            "Niewielkie gesty empatii."
+          ],
+          "0.5": [
+            "Wyraźne wezwania do wsparcia i identyfikacji z ofiarami.",
+            "Organizowanie drobnych działań pomocowych.",
+            "Słowa zachęcające do wspólnego działania."
+          ],
+          "0.75": [
+            "Silne wezwania do solidarności i zbiorowego działania.",
+            "Mobilizacja społeczna oparta na empatii.",
+            "Zachęty do aktywnego wsparcia grupy lub sprawy."
+          ],
+          "1.0": [
+            "Intensywna, jednocząca retoryka budująca szeroką koalicję wsparcia.",
+            "Pełne zaangażowanie społeczności w obronę ofiar.",
+            "Apel do zbiorowego działania i odpowiedzialności."
+          ]
+        }
+      },
+      {
+        "id": "emotion_apathy",
+        "name": "Apathy / Neutrality",
+        "definition": "Brak emocjonalnego zaangażowania lub obojętność wobec tematu.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Wyraźne zainteresowanie i emocjonalne zaangażowanie.",
+            "Silne emocje i wezwania do działania.",
+            "Zdecydowane stanowisko."
+          ],
+          "0.25": [
+            "Małe zainteresowanie lub dystans wobec tematu.",
+            "Słabe sygnały obojętności.",
+            "Niewielka motywacja do działania."
+          ],
+          "0.5": [
+            "Umiarkowana obojętność; brak silnych emocji.",
+            "Powściągliwy, zdystansowany ton.",
+            "Brak wezwania do aktywności."
+          ],
+          "0.75": [
+            "Wyraźna apatia; przesunięcie uwagi na inne sprawy.",
+            "Minimalne reakcje emocjonalne i brak mobilizacji.",
+            "Ogólne zniechęcenie i rezygnacja."
+          ],
+          "1.0": [
+            "Całkowite obojętność i wycofanie z udziału publicznego.",
+            "Brak zainteresowania polityką i działaniem.",
+            "Aktywne odrzucenie uczestnictwa w debacie."
+          ]
+        }
+      }
+    ],
+    "cleavages": [
+      {
+        "id": "cleavage_post_peasant",
+        "name": "Post-Peasant / Elite vs Provincial",
+        "definition": "Oś konfliktu kulturowego między elitami miejskimi a prowincjonalnymi; duma przeciwko condescension.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak aktywacji tej osi; neutralne odniesienia geograficzne.",
+            "Opis demograficzny bez wartościowania.",
+            "Informacje o regionie bez konfliktowego tonu."
+          ],
+          "0.25": [
+            "Słabe sygnały napięcia między elitami a prowincją.",
+            "Delikatne odniesienia do różnic kulturowych.",
+            "Subtelne uwagi o odmiennych wartościach."
+          ],
+          "0.5": [
+            "Wyraźne wskazania na antagonizmy między elitami a prowincją.",
+            "Retoryka podkreślająca różnice w stylu życia i wartościach.",
+            "Przykłady opisywania elit jako oderwanych."
+          ],
+          "0.75": [
+            "Silne narracje o dominacji elit i upokorzeniu prowincji.",
+            "Mobilizacja oparta na poczuciu hańby lub braku uznania.",
+            "Ostry język przeciwko 'Warszawce' lub 'salonowi'."
+          ],
+          "1.0": [
+            "Ekstremalna polaryzacja i wezwania do systemowej zmiany przeciwko elitom.",
+            "Narracje przedstawiające prowincję jako moralnie wyższe i upokorzoną.",
+            "Slogany i kampanie w pełni oparte na tym konflikcie."
+          ]
+        }
+      },
+      {
+        "id": "cleavage_economic_anxiety",
+        "name": "Economic Anxiety / Survival & Fairness",
+        "definition": "Oś konfliktu związana z niepewnością ekonomiczną, kosztami życia i żądaniami sprawiedliwości materialnej.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odniesień ekonomicznych lub obaw o dobrobyt.",
+            "Informacje finansowe bez emocjonalnego tonu.",
+            "Neutralne statystyki ekonomiczne."
+          ],
+          "0.25": [
+            "Delikatne wzmianki o kosztach życia lub niepewności.",
+            "Niewielkie obawy o przyszłość ekonomiczną.",
+            "Słabe sygnały niezadowolenia materialnego."
+          ],
+          "0.5": [
+            "Wyraźne wskazanie niepewności ekonomicznej i troski o survival.",
+            "Krytyka kosztów życia i polityk gospodarczych.",
+            "Narracje podkreślające nierówności ekonomiczne."
+          ],
+          "0.75": [
+            "Silne odwołania do strachu przed biedą i utratą stabilności.",
+            "Mobilizowanie poprzez obietnice polityk redystrybucyjnych.",
+            "Wezwania do interwencji państwa w imię bezpieczeństwa materialnego."
+          ],
+          "1.0": [
+            "Kampanie silnie oparte na lęku ekonomicznym, groźbach utraty bytu.",
+            "Narracje prowadzące do radykalnych żądań ekonomicznych.",
+            "Apel o natychmiastowe, szerokie działania w celu ratowania standardu życia."
+          ]
+        }
+      },
+      {
+        "id": "cleavage_sovereigntist",
+        "name": "Sovereigntist / National vs Global",
+        "definition": "Oś konfliktu dotycząca suwerenności narodowej i sprzeciwu wobec wpływów zewnętrznych (np. UE, globalizm).",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak dyskusji o suwerenności; neutralne odniesienia międzynarodowe.",
+            "Fakty bez znaczenia politycznego wobec suwerenności.",
+            "Opisy współpracy międzynarodowej bez wpływu na tożsamość."
+          ],
+          "0.25": [
+            "Delikatne obawy związane z wpływem instytucji zewnętrznych.",
+            "Niewielkie uwagi o zachowaniu autonomii państwa.",
+            "Subtelne preferencje dla lokalnych decyzji."
+          ],
+          "0.5": [
+            "Wyraźne odwołania do ochrony suwerenności i krytyki zewnętrznych wpływów.",
+            "Retoryka podkreślająca prymat interesów narodowych.",
+            "Argumenty wskazujące na zagrożenie ze strony instytucji międzynarodowych."
+          ],
+          "0.75": [
+            "Silne narracje o ochronie granic i kulturowej integralności kraju.",
+            "Mobilizowanie oporu wobec decyzji zewnętrznych organów.",
+            "Wezwania do polityk ograniczających wpływ zagraniczny."
+          ],
+          "1.0": [
+            "Ekstremalne anty-globalistyczne narracje i wezwania do separacji.",
+            "Retoryka demonizująca wpływy zagraniczne jako zagrożenie egzystencjalne.",
+            "Kampanie polityczne w pełni oparte na suwerenności jako centralnym haśle."
+          ]
+        }
+      },
+      {
+        "id": "cleavage_generational",
+        "name": "Generational / Youth vs Establishment",
+        "definition": "Oś konfliktu między młodszymi pokoleniami dążącymi do zmiany a ustalonym establishmentem politycznym.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odwołań do konfliktu generacyjnego; neutralne demograficznie.",
+            "Analiza problemów międzypokoleniowych bez preferencji.",
+            "Brak języka kontrastującego pokolenia."
+          ],
+          "0.25": [
+            "Delikatne odniesienia do różnic w priorytetach międzypokoleniowych.",
+            "Wspomnienia o odmiennych aspiracjach młodzieży.",
+            "Słabe sygnały niezgody pokoleniowej."
+          ],
+          "0.5": [
+            "Wyraźne porównania postaw młodych i starszych wyborców.",
+            "Retoryka podkreślająca pragnienie zmiany przez młode pokolenie.",
+            "Argumenty o odrzuceniu status quo przez młodsze grupy."
+          ],
+          "0.75": [
+            "Silne narracje o potrzebie przewrotu systemowego przez młodzież.",
+            "Mobilizacja młodych do działania przeciw establishmentowi.",
+            "Wyraźna polaryzacja postaw politycznych według wieku."
+          ],
+          "1.0": [
+            "Głębokie wezwania do usunięcia establishmentu i radykalnej przebudowy systemu.",
+            "Skrajne anty-establishmentowe kampanie celujące w młodsze pokolenia.",
+            "Retoryka nawołująca do rewolucyjnych zmian demograficznych."
+          ]
+        }
+      },
+      {
+        "id": "cleavage_trauma",
+        "name": "Trauma / Historical Victimhood",
+        "definition": "Oś konfliktu oparta na historycznych krzywdach, pamięci zbiorowej i narracjach ofiary.",
+        "annotation_type": "continuous",
+        "anchors": {
+          "0.0": [
+            "Brak odniesień historycznych lub traumy.",
+            "Analiza bez apelowania do pamięci zbiorowej.",
+            "Neutralne ujęcie wydarzeń historycznych."
+          ],
+          "0.25": [
+            "Delikatne wspomnienia o przeszłych krzywdach bez silnego tonu.",
+            "Umiarkowane odniesienia do pamięci historycznej.",
+            "Niewielkie akcenty dotyczące ofiar."
+          ],
+          "0.5": [
+            "Wyraźne odniesienia do historycznych krzywd i ich wpływu na teraźniejszość.",
+            "Narracje odwołujące się do pamięci zbiorowej w celu uzasadnienia stanowisk.",
+            "Wykorzystywanie historycznych wydarzeń w dyskursie politycznym."
+          ],
+          "0.75": [
+            "Silne emocjonalne odwołania do traumy i wspólnej historii cierpienia.",
+            "Mobilizowanie polityczne na podstawie pamięci o ofiarach.",
+            "Zastosowanie traumy do legitymizacji politycznych kroków."
+          ],
+          "1.0": [
+            "Ekstremalne odwołania do traumy w celu uzasadnienia politycznych żądań.",
+            "Narracje historyczne skonstruowane by legitymizować działania antypluralistyczne.",
+            "Dramatyczne wykorzystanie pamięci zbiorowej do mobilizacji masowej."
+          ]
+        }
+      }
+    ],
+    "metadata_fields": [
+      {
+        "id": "meta_source_type",
+        "name": "Source Type",
+        "type": "categorical",
+        "values": ["news", "social", "speech", "editorial", "meme", "forum", "research", "other"]
+      },
+      {
+        "id": "meta_actors",
+        "name": "Actors",
+        "type": "list_of_strings",
+        "description": "Named entities or actor identifiers mentioned in text (people, parties, organizations)."
+      },
+      {
+        "id": "meta_targets",
+        "name": "Targets",
+        "type": "list_of_strings",
+        "description": "Group(s) or entity(ies) targeted by tactics (e.g., 'elity', 'uchodźcy', 'rolnicy')."
+      },
+      {
+        "id": "meta_modality",
+        "name": "Modality",
+        "type": "categorical",
+        "values": ["text", "image", "video", "audio", "mixed"]
+      },
+      {
+        "id": "meta_provenance",
+        "name": "Provenance",
+        "type": "structured",
+        "fields": {
+          "origin": ["human", "synthetic"],
+          "generator_id": "string_or_null",
+          "reviewer_id": "string_or_null"
+        }
+      },
+      {
+        "id": "meta_temporal_anchor",
+        "name": "Temporal Anchor",
+        "type": "string",
+        "description": "Optional short token or date referencing event/time (e.g., '2025-04-10_Smolensk_anniversary')."
+      },
+      {
+        "id": "meta_confidence",
+        "name": "Model Confidence",
+        "type": "float",
+        "range": [0.0, 1.0],
+        "description": "Model's calibrated confidence for predicted labels."
+      }
+    ],
+    "derived_outputs": [
+      {
+        "id": "derived_cleavage_intensities",
+        "name": "Cleavage Activation Intensities",
+        "type": "dict",
+        "description": "Five floats 0.0-1.0 representing intensity per cleavage."
+      },
+      {
+        "id": "derived_cas",
+        "name": "CAS (Cleavage Activation Score)",
+        "type": "integer",
+        "range": [1, 5],
+        "description": "Derived 1-5 score computed by calibrated mapping of intensities + coherence."
+      },
+      {
+        "id": "derived_coherence",
+        "name": "Coherence",
+        "type": "float_or_binary",
+        "range": [0.0, 1.0],
+        "description": "Probability or binary signal indicating whether activated cleavages form a coherent narrative."
+      },
+      {
+        "id": "derived_aai",
+        "name": "AII (Actor Influence Index)",
+        "type": "float",
+        "range": [0.0, 1.0],
+        "description": "Optional score of actor prominence/influence within the narrative domain."
+      }
+    ]
+  },
+  "annotation_guidelines_reference": {
+    "url": "https://github.com/chmielvu/Magdalenka/blob/110f6be0d92bdc3cee9c5bca6d4603fc6b82306c/Codex.json",
+    "note": "Codex.json is canonical SSOT. All label updates must be versioned and reviewed."
+  },
+  "provenance_and_governance": {
+    "ssot_field": "labels",
+    "versioning": {
+      "strategy": "semver",
+      "change_control": "major changes require adjudication panel and updated manifest; minor edits logged with changelog entry"
+    },
+    "ci_checks": [
+      "schema_validation",
+      "label_name_collision",
+      "examples_presence",
+      "engine_config_consistency"
+    ]
+  }
+}

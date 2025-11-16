@@ -1,0 +1,72 @@
+
+{
+  "cleavage_post_peasant": {
+    "elity": 1.0,
+    "warszawka": 1.0,
+    "prowincja": 1.0,
+    "rolnicy": 1.0,
+    "pogarda": 0.9,
+    "salon": 0.9,
+    "układ": 0.9,
+    "kasta": 0.85,
+    "lewactwo": 0.85,
+    "lemingi": 0.8,
+    "wstawanie z kolan": 0.8,
+    "polska powiatowa": 0.8,
+    "zwykły człowiek": 0.8
+  },
+  "cleavage_economic_anxiety": {
+    "inflacja": 1.0,
+    "drożyzna": 1.0,
+    "Zielony Ład": 1.0,
+    "koszty życia": 1.0,
+    "ets2": 0.9,
+    "patodeweloperka": 0.9,
+    "mercosur": 0.85,
+    "rolnictwo": 0.8,
+    "bieda": 0.8,
+    "umowy śmieciowe": 0.85,
+    "kredyt 0%": 0.7
+  },
+  "cleavage_sovereigntist": {
+    "niemiecka agentura": 1.0,
+    "dyktat Brukseli": 1.0,
+    "Targowica": 1.0,
+    "suwerenność": 1.0,
+    "niepodległość": 0.9,
+    "unia": 0.8,
+    "bruksela": 0.85,
+    "rosja": 0.95,
+    "kreml": 0.9,
+    "migranci": 0.9,
+    "eurokołchoz": 0.9,
+    "polexit": 0.9
+  },
+  "cleavage_generational": {
+    "młodzi": 1.0,
+    "pokolenie": 1.0,
+    "dziadersi": 1.0,
+    "beton": 1.0,
+    "duopol": 1.0,
+    "zabetonowana_scena": 0.85,
+    "partyjny beton": 0.8,
+    "emerytury": 0.75,
+    "boomer": 0.7
+  },
+  "cleavage_trauma": {
+    "smoleńsk": 1.0,
+    "zdrada": 1.0,
+    "reparacje": 1.0,
+    "wołyń": 1.0,
+    "ludobójstwo": 1.0,
+    "pedagogika_wstydu": 1.0,
+    "katyń": 1.0,
+    "powstanie_warszawskie": 1.0,
+    "stan_wojenny": 0.9,
+    "żołnierze wyklęci": 0.9,
+    "jedwabne": 0.9,
+    "okrągły stół": 0.9,
+    "banderowcy": 0.9,
+    "żydokomuna": 0.9
+  }
+}

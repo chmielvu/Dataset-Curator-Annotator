@@ -1,0 +1,5 @@
+{
+  "name": "Magdalenka Annotation Pipeline",
+  "description": "A multi-agent application for curating and annotating social media posts based on the Magdalenka Codex. The Curator agent finds relevant posts using Google Search, and the Annotator agent classifies them using a Planner-Worker-Critic pattern.",
+  "requestFramePermissions": []
+}
