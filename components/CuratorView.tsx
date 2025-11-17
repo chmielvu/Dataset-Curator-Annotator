@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { DatasetState, SwarmJobResult, SpecialistAgentResult, Annotation } from '../types';
 import { useEmbedding } from '../hooks/useEmbedding';
 import { db } from '../lib/dexie';
@@ -67,56 +67,92 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!file.name.endsWith('.json')) {
-        onError("Invalid file type. Please select a .json file.");
+  
+    if (!file.name.endsWith('.jsonl')) {
+        onError("Invalid file type. Please select a .jsonl file (JSON Lines).");
+        event.target.value = '';
         return;
     }
-
+  
     onError(null);
     setIsLoading(true);
-    setStatusMessage(`Processing ${file.name}...`);
-
+    
     try {
         const text = await file.text();
-        const annotations = JSON.parse(text) as Partial<Annotation>[];
-        if (!Array.isArray(annotations)) {
-            throw new Error("Invalid JSON format. The file should contain a JSON array of objects.");
-        }
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const totalLines = lines.length;
         
-        const posts = annotations
-            .map(ann => ann.text)
-            .filter((text): text is string => typeof text === 'string' && text.trim() !== '');
-
-        if (posts.length === 0) {
-            throw new Error("No valid posts with a 'text' field were found in the file.");
+        if (totalLines === 0) {
+          throw new Error("File is empty or contains no valid lines.");
         }
 
-        const batchResult: SwarmJobResult = {
-            finalPosts: posts,
-            triggerSuggestions: [],
-            agentReports: [{
-                agentName: 'Manual',
-                contributedPosts: posts,
-                executedQueries: 'N/A - Manual Batch Upload',
-                log: `Batch of ${posts.length} posts was uploaded from file: ${file.name}.`
-            }]
+        setBatchStatus({ fileName: file.name, total: totalLines, processed: 0, found: 0, errors: 0 });
+    
+        const posts: string[] = [];
+        const CHUNK_SIZE = 100; // Process 100 lines at a time to keep UI responsive
+        let currentIndex = 0;
+    
+        const processChunk = () => {
+          const chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalLines);
+          let chunkFound = 0;
+          let chunkErrors = 0;
+    
+          for (let i = currentIndex; i < chunkEnd; i++) {
+            const line = lines[i];
+            try {
+              const annotation = JSON.parse(line) as Partial<Annotation>;
+              if (annotation.text && typeof annotation.text === 'string' && annotation.text.trim()) {
+                posts.push(annotation.text.trim());
+                chunkFound++;
+              } else {
+                chunkErrors++;
+              }
+            } catch (e) {
+              chunkErrors++;
+            }
+          }
+    
+          setBatchStatus(prev => ({
+            ...prev!,
+            processed: chunkEnd,
+            found: prev!.found + chunkFound,
+            errors: prev!.errors + chunkErrors,
+          }));
+    
+          currentIndex = chunkEnd;
+    
+          if (currentIndex < totalLines) {
+            setTimeout(processChunk, 0); // Yield to main thread before next chunk
+          } else {
+            // Processing finished
+            if (posts.length === 0) {
+                onError(`No valid posts with a 'text' field were found in ${file.name}.`);
+            } else {
+                const batchResult: SwarmJobResult = {
+                    finalPosts: posts,
+                    triggerSuggestions: [],
+                    agentReports: [{
+                        agentName: 'Manual',
+                        contributedPosts: posts,
+                        executedQueries: 'N/A - Manual Batch Upload',
+                        log: `Batch of ${posts.length} posts was uploaded from file: ${file.name}.`
+                    }]
+                };
+                onPostsFound(batchResult);
+                setLastSearchReport(batchResult);
+            }
+            setIsLoading(false);
+            setBatchStatus(null);
+            if (event.target) event.target.value = '';
+          }
         };
-        onPostsFound(batchResult);
-        setLastSearchReport(batchResult);
-
+        
+        processChunk();
     } catch (e: any) {
-        let errorMessage = `Failed to process ${file.name}.`;
-        if (e instanceof SyntaxError) {
-            errorMessage += " The file does not contain valid JSON. Please ensure it's a correctly formatted JSON array.";
-        } else {
-            errorMessage += ` Error: ${e.message}`;
-        }
-        onError(errorMessage);
-    } finally {
+        onError(`Failed to read file: ${e.message}`);
         setIsLoading(false);
-        setStatusMessage(null);
-        event.target.value = ''; // Reset file input
+        setBatchStatus(null);
+        if (event.target) event.target.value = '';
     }
   };
 
@@ -221,7 +257,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   };
   
   const getButtonText = () => {
-    if (isLoading) return statusMessage || 'Swarm is Running...';
+    if (isLoading && !isProcessingFile) return statusMessage || 'Swarm is Running...';
     return 'Run Curator Swarm (Batch of 10)';
   };
 
@@ -254,8 +290,8 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
       <div className="my-6 space-y-4 bg-white dark:bg-slate-900/30 p-4 rounded-lg border dark:border-slate-700/50">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             <div className="md:col-span-2">
-                <button onClick={handleRunAgent} disabled={!!isLoading || isProcessingFile} className="w-full px-4 py-3 text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20">
-                    {isLoading ? (
+                <button onClick={handleRunAgent} disabled={isLoading || isProcessingFile} className="w-full px-4 py-3 text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20">
+                    {isLoading && !isProcessingFile ? (
                         <><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         {getButtonText()}</>
                     ) : getButtonText()}
@@ -265,7 +301,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 <RagStatusIndicator />
             </div>
         </div>
-        {isLoading && (
+        {isLoading && !isProcessingFile && (
           <div className="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border dark:border-slate-700/50 space-y-2">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 animate-pulse">{statusMessage}</p>
           </div>
@@ -281,7 +317,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
             placeholder="e.g., 'Discuss the impact of Zielony Ład on small farms.'"
             className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
             rows={2}
-            disabled={!!isLoading || isProcessingFile}
+            disabled={isLoading || isProcessingFile}
           />
            <p className="text-xs text-slate-500 mt-1">The agent swarm will use this for RAG-augmented search.</p>
         </div>
@@ -297,11 +333,11 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 placeholder="Paste text here to send it directly to the Annotator."
                 className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
                 rows={2}
-                disabled={!!isLoading || isProcessingFile}
+                disabled={isLoading || isProcessingFile}
               />
               <button 
                 onClick={handleManualSubmit} 
-                disabled={!manualPost.trim() || !!isLoading || isProcessingFile}
+                disabled={!manualPost.trim() || isLoading || isProcessingFile}
                 className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 disabled:bg-rose-400 dark:disabled:bg-rose-800"
               >
                 Submit
@@ -322,7 +358,18 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Upload a batch of posts:</p>
             {isProcessingFile ? (
                 <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border dark:border-slate-700/50 space-y-2">
-                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 animate-pulse">{statusMessage}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{batchStatus.fileName}</p>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full">
+                        <div 
+                          className="bg-rose-600 h-2.5 rounded-full transition-all duration-200" 
+                          style={{ width: `${(batchStatus.processed / batchStatus.total) * 100}%` }}>
+                        </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>Processed: {batchStatus.processed} / {batchStatus.total}</span>
+                        <span>Found: {batchStatus.found}</span>
+                        <span>Errors: {batchStatus.errors}</span>
+                    </div>
                 </div>
             ) : (
               <>
@@ -330,10 +377,10 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
-                    <span>Upload .json Batch</span>
-                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={!!isLoading || isProcessingFile} accept=".json" />
+                    <span>Upload .jsonl Batch</span>
+                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={isLoading || isProcessingFile} accept=".jsonl" />
                 </label>
-                <p className="text-xs text-slate-500">File must be a JSON array of objects, each with a "text" field.</p>
+                <p className="text-xs text-slate-500">File must be JSON Lines format (.jsonl), with one JSON object per line, each containing a "text" field.</p>
               </>
             )}
           </div>
