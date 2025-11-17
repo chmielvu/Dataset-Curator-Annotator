@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { DatasetState, SwarmJobStatus, SwarmJobResult } from '../types';
+import { DatasetState, SwarmJobStatus, SwarmJobResult, SpecialistAgentResult } from '../types';
 import { useEmbedding } from '../hooks/useEmbedding';
 import { db } from '../lib/dexie';
 
@@ -9,6 +10,40 @@ interface CuratorViewProps {
   onPostsFound: (result: SwarmJobResult) => void;
   onError: (error: string | null) => void;
 }
+
+const getAgentStyles = (agentName: SpecialistAgentResult['agentName']) => {
+  switch (agentName) {
+    case 'Balancer':
+      return {
+        bg: 'bg-blue-50 dark:bg-blue-900/20',
+        border: 'border-blue-200 dark:border-blue-500/30',
+        nameBg: 'bg-blue-100 dark:bg-blue-900/50',
+        nameText: 'text-blue-900 dark:text-blue-200',
+      };
+    case 'Explorer':
+      return {
+        bg: 'bg-green-50 dark:bg-green-900/20',
+        border: 'border-green-200 dark:border-green-500/30',
+        nameBg: 'bg-green-100 dark:bg-green-900/50',
+        nameText: 'text-green-900 dark:text-green-200',
+      };
+    case 'Wildcard':
+      return {
+        bg: 'bg-purple-50 dark:bg-purple-900/20',
+        border: 'border-purple-200 dark:border-purple-500/30',
+        nameBg: 'bg-purple-100 dark:bg-purple-900/50',
+        nameText: 'text-purple-900 dark:text-purple-200',
+      };
+    default: // Manual
+      return {
+        bg: 'bg-gray-100 dark:bg-gray-700/50',
+        border: 'border-gray-200 dark:border-gray-600',
+        nameBg: 'bg-gray-200 dark:bg-gray-900/50',
+        nameText: 'text-gray-900 dark:text-gray-200',
+      };
+  }
+};
+
 
 const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, onError }) => {
   const [jobStatus, setJobStatus] = useState<SwarmJobStatus | null>(null);
@@ -39,6 +74,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
           if (status.stage === 'COMPLETE') {
             onPostsFound(status.result!);
             setLastSearchReport(status.result!);
+            setShowReport(true);
             setJobId(null);
             setJobStatus(null);
           } else if (status.stage === 'FAILED') {
@@ -260,18 +296,38 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
       )}
 
       {showReport && lastSearchReport && (
-        <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-500/30 rounded-lg space-y-4">
-            {lastSearchReport.agentReports.map((report, index) => (
-                <div key={index} className="p-3 bg-white dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                    <h4 className="font-semibold text-sm text-rose-800 dark:text-rose-300">Report from Agent: <span className="font-mono bg-rose-100 dark:bg-rose-900/50 text-rose-900 dark:text-rose-200 px-2 py-0.5 rounded-md">{report.agentName}</span></h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{report.log}</p>
-                    <p className="text-xs font-semibold mt-2">Contributed {report.contributedPosts.length} post(s).</p>
-                </div>
-            ))}
+        <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+          <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100">Last Swarm Report</h3>
+            {lastSearchReport.agentReports.map((report, index) => {
+                const styles = getAgentStyles(report.agentName);
+                return (
+                    <div key={index} className={`p-4 rounded-lg border ${styles.bg} ${styles.border}`}>
+                        <h4 className="font-semibold text-sm flex items-center">
+                            Report from Agent: 
+                            <span className={`font-mono px-2 py-1 rounded-md ml-2 text-xs ${styles.nameBg} ${styles.nameText}`}>
+                                {report.agentName}
+                            </span>
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">"{report.log}"</p>
+                        <p className="text-sm font-semibold mt-3">Contributed {report.contributedPosts.length} post(s):</p>
+                         {report.contributedPosts.length > 0 ? (
+                            <ul className="mt-2 space-y-2 text-xs">
+                                {report.contributedPosts.map((post, postIndex) => (
+                                    <li key={postIndex} className="p-2 bg-white/50 dark:bg-gray-800/50 rounded border dark:border-gray-600/50">
+                                        <span className="text-gray-700 dark:text-gray-300">{post}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                         ) : (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No posts were contributed by this agent.</p>
+                         )}
+                    </div>
+                );
+            })}
             {lastSearchReport.triggerSuggestions && lastSearchReport.triggerSuggestions.length > 0 && (
               <div className="p-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">Orchestrator's Trigger Suggestions:</span>
+                    <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">Orchestrator's Trigger Suggestions:</span>
                     <button onClick={handleCopySuggestions} className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/50 hover:bg-rose-200 dark:hover:bg-rose-900 px-2 py-1 rounded-md transition-colors">
                       {copyButtonText}
                     </button>

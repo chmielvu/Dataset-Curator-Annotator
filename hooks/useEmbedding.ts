@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../lib/dexie';
 import { DocChunk } from '../types';
@@ -17,27 +18,71 @@ export interface ChunkError {
 }
 
 /**
- * Implements a fixed-size, overlapping chunking strategy.
+ * Implements a more sophisticated adaptive hybrid chunking strategy.
+ * It respects semantic boundaries (paragraphs) while merging small chunks 
+ * and splitting oversized ones to improve context quality for RAG.
  * @param text The source text to chunk.
- * @param chunkSize The character length of each chunk.
- * @param chunkOverlap The number of characters to overlap between chunks.
  * @returns An array of text chunks.
  */
-const createOverlappingChunks = (text: string, chunkSize: number, chunkOverlap: number): string[] => {
-    if (chunkSize <= chunkOverlap) {
-        console.error("Chunk size must be greater than chunk overlap. Defaulting to paragraph splitting.");
-        return text.split(/\n\s*\n/).filter((t) => t.trim().length > 20);
-    }
+const intelligentChunkingStrategy = (text: string): string[] => {
+    const TARGET_CHUNK_SIZE = 1000;
+    const MAX_CHUNK_SIZE = 1500;
+    const MIN_CHUNK_SIZE = 200;
+    const CHUNK_OVERLAP = 100;
+
     if (!text) return [];
 
-    const chunks: string[] = [];
-    let i = 0;
-    while (i < text.length) {
-        const end = i + chunkSize;
-        chunks.push(text.slice(i, end));
-        i += chunkSize - chunkOverlap;
+    // 1. Initial semantic split by paragraphs
+    const paragraphs = text
+        .replace(/\n{3,}/g, '\n\n') // Normalize newlines
+        .split(/\n\s*\n/)
+        .filter(p => p.trim().length > 0);
+
+    const finalChunks: string[] = [];
+    let smallChunkBuffer: string[] = [];
+
+    const flushBuffer = () => {
+        if (smallChunkBuffer.length > 0) {
+            finalChunks.push(smallChunkBuffer.join('\n\n').trim());
+            smallChunkBuffer = [];
+        }
+    };
+    
+    // Helper for oversized chunks
+    const splitOversizedChunk = (chunk: string): string[] => {
+        const subChunks: string[] = [];
+        let i = 0;
+        while (i < chunk.length) {
+            const end = i + MAX_CHUNK_SIZE;
+            subChunks.push(chunk.slice(i, end));
+            i += MAX_CHUNK_SIZE - CHUNK_OVERLAP;
+        }
+        return subChunks;
+    };
+
+    // 2. Process each paragraph
+    for (const p of paragraphs) {
+        const trimmedParagraph = p.trim();
+
+        if (trimmedParagraph.length > MAX_CHUNK_SIZE) {
+            flushBuffer(); // Process any pending small chunks first
+            const subChunks = splitOversizedChunk(trimmedParagraph);
+            finalChunks.push(...subChunks);
+        } else if (trimmedParagraph.length < MIN_CHUNK_SIZE) {
+            smallChunkBuffer.push(trimmedParagraph);
+            // If buffer is now big enough, flush it
+            if (smallChunkBuffer.join('\n\n').length >= TARGET_CHUNK_SIZE) {
+                flushBuffer();
+            }
+        } else { // Paragraph is a good size
+            flushBuffer(); // Process any pending small chunks first
+            finalChunks.push(trimmedParagraph);
+        }
     }
-    return chunks.filter(chunk => chunk.trim().length > 20); // Also filter small final chunks
+
+    flushBuffer(); // Process any remaining small chunks
+
+    return finalChunks.filter(chunk => chunk.length > 20);
 };
 
 
@@ -197,11 +242,8 @@ export const useEmbedding = () => {
   }, [generateEmbedding]);
   
   const processAndEmbedDocument = useCallback(async (docName: string, text: string) => {
-    const CHUNK_SIZE_CHARS = 1000;
-    const CHUNK_OVERLAP_CHARS = 100;
-    
-    // Replace simple paragraph splitting with a more robust overlapping chunk strategy.
-    const chunks = createOverlappingChunks(text, CHUNK_SIZE_CHARS, CHUNK_OVERLAP_CHARS);
+    // Use the new intelligent chunking strategy
+    const chunks = intelligentChunkingStrategy(text);
 
     const totalChunks = chunks.length;
     if (totalChunks === 0) {
