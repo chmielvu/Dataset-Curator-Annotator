@@ -14,33 +14,13 @@ interface CuratorViewProps {
 const getAgentStyles = (agentName: SpecialistAgentResult['agentName']) => {
   switch (agentName) {
     case 'Balancer':
-      return {
-        bg: 'bg-blue-50 dark:bg-blue-900/20',
-        border: 'border-blue-200 dark:border-blue-500/30',
-        nameBg: 'bg-blue-100 dark:bg-blue-900/50',
-        nameText: 'text-blue-900 dark:text-blue-200',
-      };
+      return { bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-200 dark:border-blue-500/30', cardBg: 'bg-blue-50 dark:bg-blue-900/30' };
     case 'Explorer':
-      return {
-        bg: 'bg-green-50 dark:bg-green-900/20',
-        border: 'border-green-200 dark:border-green-500/30',
-        nameBg: 'bg-green-100 dark:bg-green-900/50',
-        nameText: 'text-green-900 dark:text-green-200',
-      };
+      return { bg: 'bg-green-500', text: 'text-green-500', border: 'border-green-200 dark:border-green-500/30', cardBg: 'bg-green-50 dark:bg-green-900/30' };
     case 'Wildcard':
-      return {
-        bg: 'bg-purple-50 dark:bg-purple-900/20',
-        border: 'border-purple-200 dark:border-purple-500/30',
-        nameBg: 'bg-purple-100 dark:bg-purple-900/50',
-        nameText: 'text-purple-900 dark:text-purple-200',
-      };
+      return { bg: 'bg-purple-500', text: 'text-purple-500', border: 'border-purple-200 dark:border-purple-500/30', cardBg: 'bg-purple-50 dark:bg-purple-900/30' };
     default: // Manual
-      return {
-        bg: 'bg-gray-100 dark:bg-gray-700/50',
-        border: 'border-gray-200 dark:border-gray-600',
-        nameBg: 'bg-gray-200 dark:bg-gray-900/50',
-        nameText: 'text-gray-900 dark:text-gray-200',
-      };
+      return { bg: 'bg-slate-500', text: 'text-slate-500', border: 'border-slate-200 dark:border-slate-600', cardBg: 'bg-slate-50 dark:bg-slate-800/50' };
   }
 };
 
@@ -53,12 +33,21 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   const [lastSearchReport, setLastSearchReport] = useState<SwarmJobResult | null>(null);
   const [showReport, setShowReport] = useState(false);
   const [copyButtonText, setCopyButtonText] = useState('Copy Suggestions');
+  const [batchStatus, setBatchStatus] = useState<{
+    fileName: string;
+    processed: number;
+    total: number;
+    found: number;
+    errors: number;
+  } | null>(null);
+
   
   const { isReady: isEmbeddingReady, isLoading: isEmbeddingLoading, generateEmbedding, initializationError } = useEmbedding();
   const pollingIntervalRef = useRef<number | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const isLoading = jobStatus && jobStatus.stage !== 'IDLE' && jobStatus.stage !== 'COMPLETE' && jobStatus.stage !== 'FAILED';
+  const isProcessingFile = batchStatus !== null;
 
   // Polling logic
   useEffect(() => {
@@ -104,8 +93,8 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
       }
     }, [jobStatus?.log]);
 
-  const handleRunAgent = async () => {
-    if (manualPost.trim() && !manualQueries.trim()) {
+  const handleManualSubmit = () => {
+    if (manualPost.trim()) {
       const manualResult: SwarmJobResult = {
         finalPosts: [manualPost.trim()],
         triggerSuggestions: [],
@@ -115,13 +104,111 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
           executedQueries: 'N/A - Manual Post Entry',
           log: 'Post was entered manually, bypassing agent swarm.'
         }]
-      }
+      };
       onPostsFound(manualResult);
       setLastSearchReport(manualResult);
       setManualPost('');
-      return;
+    }
+  };
+
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.jsonl')) {
+        onError("Invalid file type. Please select a .jsonl file.");
+        return;
     }
 
+    onError(null);
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    const totalLines = lines.length;
+
+    if (totalLines === 0) {
+      onError("File is empty or contains no processable lines.");
+      event.target.value = '';
+      return;
+    }
+    
+    setBatchStatus({
+      fileName: file.name,
+      processed: 0,
+      total: totalLines,
+      found: 0,
+      errors: 0
+    });
+
+    const posts: string[] = [];
+    const errorMessages: string[] = [];
+    let currentIndex = 0;
+    const CHUNK_SIZE = 250; // Process lines in chunks to avoid freezing the UI
+
+    const processNextChunk = () => {
+      const batchEnd = Math.min(currentIndex + CHUNK_SIZE, totalLines);
+      let chunkFound = 0;
+      let chunkErrors = 0;
+
+      for (let i = currentIndex; i < batchEnd; i++) {
+        try {
+          const json = JSON.parse(lines[i]);
+          if (typeof json.text === 'string' && json.text.trim() !== '') {
+            posts.push(json.text.trim());
+            chunkFound++;
+          } else {
+            errorMessages.push(`Line ${i + 1}: Missing or empty 'text' field.`);
+            chunkErrors++;
+          }
+        } catch (e) {
+          errorMessages.push(`Line ${i + 1}: Invalid JSON.`);
+          chunkErrors++;
+        }
+      }
+
+      setBatchStatus(prev => prev ? ({
+        ...prev,
+        processed: batchEnd,
+        found: prev.found + chunkFound,
+        errors: prev.errors + chunkErrors,
+      }) : null);
+
+      currentIndex = batchEnd;
+
+      if (currentIndex < totalLines) {
+        setTimeout(processNextChunk, 0); // Yield to main thread
+      } else {
+        // Finished processing
+        setTimeout(() => { // Short delay to let the user see the 100% complete bar
+          if (errorMessages.length > 0) {
+              const errorMessage = `Parsed file with ${errorMessages.length} error(s):\n- ${errorMessages.slice(0, 5).join('\n- ')}`;
+              onError(errorMessage + (errorMessages.length > 5 ? `\n...and ${errorMessages.length - 5} more.` : ''));
+          }
+          if (posts.length > 0) {
+              const batchResult: SwarmJobResult = {
+                  finalPosts: posts,
+                  triggerSuggestions: [],
+                  agentReports: [{
+                      agentName: 'Manual',
+                      contributedPosts: posts,
+                      executedQueries: 'N/A - Manual Batch Upload',
+                      log: `Batch of ${posts.length} posts was uploaded from file: ${file.name}.`
+                  }]
+              };
+              onPostsFound(batchResult);
+              setLastSearchReport(batchResult);
+          } else if (errorMessages.length === 0) {
+               onError("File is valid but contains no posts with a 'text' field.");
+          }
+          setBatchStatus(null);
+        }, 500);
+      }
+    };
+    
+    processNextChunk(); // Start the processing loop
+    event.target.value = ''; // Reset file input immediately
+  };
+
+  const handleRunAgent = async () => {
     onError(null);
     setShowReport(false);
     setJobStatus({ jobId: '', stage: 'PLANNING', message: 'Initializing job...', log: [`[${new Date().toLocaleTimeString()}] [Orchestrator] Initializing job...`] });
@@ -190,34 +277,20 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   };
 
   const RagStatusIndicator = () => {
-    let statusColor, statusText;
+    let statusColor, statusText, pulse;
     if (isEmbeddingLoading) {
-      statusColor = 'text-yellow-600 dark:text-yellow-400';
-      statusText = 'RAG Initializing...';
+      [statusColor, statusText, pulse] = ['text-yellow-600 dark:text-yellow-400', 'RAG Initializing...', true];
     } else if (initializationError) {
-      statusColor = 'text-red-600 dark:text-red-400';
-      statusText = 'RAG Failed';
+      [statusColor, statusText, pulse] = ['text-red-600 dark:text-red-400', 'RAG Failed', false];
     } else if (isEmbeddingReady) {
-      statusColor = 'text-green-600 dark:text-green-400';
-      statusText = 'RAG Ready';
+      [statusColor, statusText, pulse] = ['text-green-600 dark:text-green-400', 'RAG Ready', false];
     } else {
-        statusColor = 'text-gray-500 dark:text-gray-400';
-        statusText = 'RAG Unavailable';
+      [statusColor, statusText, pulse] = ['text-slate-500 dark:text-slate-400', 'RAG Unavailable', false];
     }
 
     return (
-      <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border ${
-          isEmbeddingLoading ? 'border-yellow-300 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/30' : 
-          initializationError ? 'border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/30' : 
-          isEmbeddingReady ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30' : 
-          'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800'
-      }`}>
-        <span className={`h-2 w-2 rounded-full ${
-            isEmbeddingLoading ? 'bg-yellow-500 animate-pulse' : 
-            initializationError ? 'bg-red-500' : 
-            isEmbeddingReady ? 'bg-green-500' : 
-            'bg-gray-400'
-        }`}></span>
+      <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border dark:border-slate-700/50 bg-slate-100 dark:bg-slate-800`}>
+        <span className={`h-2 w-2 rounded-full ${isEmbeddingLoading ? 'bg-yellow-500' : initializationError ? 'bg-red-500' : isEmbeddingReady ? 'bg-green-500' : 'bg-slate-400'} ${pulse ? 'animate-pulse' : ''}`}></span>
         <span className={`text-xs font-semibold ${statusColor}`}>{statusText}</span>
       </div>
     );
@@ -225,14 +298,14 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
 
 
   return (
-    <section className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-      <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">1. Autonomous Planner-Curator Agent</h2>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">The Orchestrator agent will analyze the dataset, deploy a swarm of specialist agents, and synthesize their findings to retrieve a batch of posts.</p>
+    <section className="p-4 sm:p-6 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+      <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">1. Autonomous Planner-Curator Agent</h2>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">The Orchestrator agent will analyze the dataset, deploy a swarm of specialist agents, and synthesize their findings to retrieve a batch of posts.</p>
       
-      <div className="my-6 space-y-4 bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
+      <div className="my-6 space-y-4 bg-white dark:bg-slate-900/30 p-4 rounded-lg border dark:border-slate-700/50">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             <div className="md:col-span-2">
-                <button onClick={handleRunAgent} disabled={!!isLoading} className="w-full px-4 py-3 text-white bg-rose-700 rounded-md hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-500 dark:disabled:bg-rose-900 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base">
+                <button onClick={handleRunAgent} disabled={!!isLoading || isProcessingFile} className="w-full px-4 py-3 text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20">
                     {isLoading ? (
                         <><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         {getButtonText()}</>
@@ -244,9 +317,9 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
             </div>
         </div>
         {isLoading && jobStatus && (
-          <div className="p-4 bg-gray-100 dark:bg-gray-900 rounded-lg border dark:border-gray-700 space-y-2">
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{jobStatus.message}</p>
-            <div ref={logContainerRef} className="h-48 overflow-y-auto bg-black text-white font-mono text-xs p-3 rounded-md scroll-smooth">
+          <div className="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border dark:border-slate-700/50 space-y-2">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{jobStatus.message}</p>
+            <div ref={logContainerRef} className="h-48 overflow-y-auto bg-slate-900 dark:bg-black text-slate-200 font-mono text-xs p-3 rounded-md scroll-smooth border border-slate-700/50">
               {(jobStatus.log || []).map((entry, index) => (
                 <p key={index} className="whitespace-pre-wrap animate-fade-in">{entry}</p>
               ))}
@@ -255,71 +328,121 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
         )}
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200 mb-2">Manual Search Queries <span className="text-sm font-normal text-gray-500">(RAG-Augmented)</span></h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-900/30 p-4 rounded-lg border dark:border-slate-700/50">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-200 mb-2">Manual Search Queries <span className="text-sm font-normal text-slate-500">(RAG-Augmented)</span></h3>
           <textarea
             value={manualQueries}
             onChange={(e) => setManualQueries(e.target.value)}
-            placeholder="e.g., 'Discuss the impact of Zielony Ład on small farms.' The agent swarm will use this for RAG-augmented search."
-            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-gray-200 dark:disabled:bg-gray-700"
+            placeholder="e.g., 'Discuss the impact of Zielony Ład on small farms.'"
+            className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
             rows={2}
-            disabled={!!isLoading}
+            disabled={!!isLoading || isProcessingFile}
           />
+           <p className="text-xs text-slate-500 mt-1">The agent swarm will use this for RAG-augmented search.</p>
         </div>
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200 mb-2">Manual Post Entry (Bypasses Agent)</h3>
-          <div className="flex items-start space-x-2">
-            <textarea
-              value={manualPost}
-              onChange={(e) => setManualPost(e.target.value)}
-              placeholder="Paste text here to send it directly to the Annotator."
-              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-gray-200 dark:disabled:bg-gray-700"
-              rows={3}
-              disabled={!!isLoading}
-            />
-            <button 
-              onClick={handleRunAgent} 
-              disabled={!manualPost.trim() || !!isLoading}
-              className="px-4 py-2 text-white bg-rose-700 rounded-md hover:bg-rose-800 disabled:bg-rose-500 dark:disabled:bg-rose-900"
-            >
-              Submit
-            </button>
+         <div className="bg-white dark:bg-slate-900/30 p-4 rounded-lg border dark:border-slate-700/50 space-y-4">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-200 mb-2">Manual Entry <span className="text-sm font-normal text-slate-500">(Bypasses Agent)</span></h3>
+          
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Submit a single post:</p>
+            <div className="flex items-start space-x-2">
+              <textarea
+                value={manualPost}
+                onChange={(e) => setManualPost(e.target.value)}
+                placeholder="Paste text here to send it directly to the Annotator."
+                className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
+                rows={2}
+                disabled={!!isLoading || isProcessingFile}
+              />
+              <button 
+                onClick={handleManualSubmit} 
+                disabled={!manualPost.trim() || !!isLoading || isProcessingFile}
+                className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 disabled:bg-rose-400 dark:disabled:bg-rose-800"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+          
+           <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-slate-300 dark:border-slate-600"></div>
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-white dark:bg-slate-900/30 px-2 text-sm text-slate-500">Or</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Upload a batch of posts:</p>
+            {batchStatus ? (
+                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border dark:border-slate-700/50 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-300 truncate pr-4" title={batchStatus.fileName}>
+                            Processing: {batchStatus.fileName}
+                        </p>
+                        <p className="font-mono text-slate-500 dark:text-slate-400">
+                            {batchStatus.processed}/{batchStatus.total}
+                        </p>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2.5">
+                        <div 
+                            className="bg-rose-600 h-2.5 rounded-full transition-all duration-150" 
+                            style={{ width: `${(batchStatus.processed / batchStatus.total) * 100}%` }}>
+                        </div>
+                    </div>
+                     <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>Found: <span className="font-semibold text-green-600 dark:text-green-400">{batchStatus.found}</span></span>
+                        <span>Errors: <span className="font-semibold text-red-600 dark:text-red-400">{batchStatus.errors}</span></span>
+                    </div>
+                </div>
+            ) : (
+              <>
+                <label className={`inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-500 shadow-sm text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-500 transition-colors ${isLoading || isProcessingFile ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span>Upload .jsonl Batch</span>
+                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={!!isLoading || isProcessingFile} accept=".jsonl" />
+                </label>
+                <p className="text-xs text-slate-500">Each line must be a JSON object with a "text" field, e.g., `{"text": "This is a post."}`</p>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {lastSearchReport && (
-          <button onClick={() => setShowReport(!showReport)} className="w-full text-sm mt-6 text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 py-2 px-4 rounded-md transition-colors">
+          <button onClick={() => setShowReport(!showReport)} className="w-full text-sm mt-6 text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 py-2 px-4 rounded-md transition-colors">
             {showReport ? 'Hide' : 'Show'} Last Swarm Report
           </button>
       )}
 
       {showReport && lastSearchReport && (
-        <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
-          <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100">Last Swarm Report</h3>
+        <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg space-y-4">
+          <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">Last Swarm Report</h3>
             {lastSearchReport.agentReports.map((report, index) => {
                 const styles = getAgentStyles(report.agentName);
                 return (
-                    <div key={index} className={`p-4 rounded-lg border ${styles.bg} ${styles.border}`}>
+                    <div key={index} className={`p-4 rounded-lg border-l-4 ${styles.border} ${styles.cardBg}`}>
                         <h4 className="font-semibold text-sm flex items-center">
-                            Report from Agent: 
-                            <span className={`font-mono px-2 py-1 rounded-md ml-2 text-xs ${styles.nameBg} ${styles.nameText}`}>
+                           <span className={`font-mono px-2 py-0.5 rounded-md text-xs font-bold text-white ${styles.bg}`}>
                                 {report.agentName}
                             </span>
                         </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">"{report.log}"</p>
-                        <p className="text-sm font-semibold mt-3">Contributed {report.contributedPosts.length} post(s):</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 italic">"{report.log}"</p>
+                        <p className="text-sm font-semibold mt-3 text-slate-800 dark:text-slate-200">Contributed {report.contributedPosts.length} post(s):</p>
                          {report.contributedPosts.length > 0 ? (
                             <ul className="mt-2 space-y-2 text-xs">
                                 {report.contributedPosts.map((post, postIndex) => (
-                                    <li key={postIndex} className="p-2 bg-white/50 dark:bg-gray-800/50 rounded border dark:border-gray-600/50">
-                                        <span className="text-gray-700 dark:text-gray-300">{post}</span>
+                                    <li key={postIndex} className="p-2 bg-white/50 dark:bg-slate-900/50 rounded border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-700 dark:text-slate-300">{post}</span>
                                     </li>
                                 ))}
                             </ul>
                          ) : (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No posts were contributed by this agent.</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">No posts were contributed by this agent.</p>
                          )}
                     </div>
                 );
@@ -327,17 +450,17 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
             {lastSearchReport.triggerSuggestions && lastSearchReport.triggerSuggestions.length > 0 && (
               <div className="p-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">Orchestrator's Trigger Suggestions:</span>
+                    <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Orchestrator's Trigger Suggestions:</span>
                     <button onClick={handleCopySuggestions} className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/50 hover:bg-rose-200 dark:hover:bg-rose-900 px-2 py-1 rounded-md transition-colors">
                       {copyButtonText}
                     </button>
                   </div>
-                   <div className="mt-2 text-gray-800 dark:text-gray-200 text-xs space-y-1">
+                   <div className="mt-2 text-slate-800 dark:text-slate-200 text-xs space-y-1">
                       {lastSearchReport.triggerSuggestions.map((suggestion, index) => (
                         <p key={index} className="font-mono p-2 bg-yellow-50 dark:bg-yellow-900/30 border-l-2 border-yellow-400">{suggestion}</p>
                       ))}
                   </div>
-                   <p className="text-xs text-gray-500 mt-1">The agent suggests adding these to <code>unified_triggers.json</code> to improve future autonomous searches.</p>
+                   <p className="text-xs text-slate-500 mt-1">The agent suggests adding these to <code>unified_triggers.json</code> to improve future autonomous searches.</p>
               </div>
             )}
         </div>

@@ -1,3 +1,4 @@
+
 export interface DatasetState {
   cleavages: {
     [key: string]: number; // e.g., 'cleavage_post_peasant': 10
@@ -41,6 +42,11 @@ export interface ArchiveSummary {
 }
 
 // ---- APO & Batch Processing ----
+export interface Draft {
+  postText: string;
+  annotation: Annotation;
+}
+
 export interface FeedbackLogEntry {
   id?: number;
   timestamp: string;
@@ -56,6 +62,41 @@ export interface QCCompletionData {
   wasEdited: boolean;
   qcAgentFeedback: string | null;
 }
+
+// ---- Generative UI & QC Agent ----
+interface BaseUiSuggestion {
+  field_path: string; // e.g., "cleavages[1]", "stance_target"
+  rationale: string;
+}
+
+export interface SliderSuggestion extends BaseUiSuggestion {
+  control_type: 'slider';
+  suggestion: number;
+  min: number;
+  max: number;
+  step: number;
+}
+
+export interface MultiSelectSuggestion extends BaseUiSuggestion {
+  control_type: 'multiselect';
+  suggestion: string[];
+  options: string[];
+}
+
+export interface TextSuggestion extends BaseUiSuggestion {
+  control_type: 'text';
+  suggestion: string;
+}
+
+export type UiSuggestion = SliderSuggestion | MultiSelectSuggestion | TextSuggestion;
+
+export interface QcAgentResult {
+  qc_passed: boolean;
+  feedback: string;
+  revised_annotation: Annotation | null;
+  ui_suggestions?: UiSuggestion[];
+}
+
 
 // ---- Swarm Curator Architecture ----
 export type SwarmJobStage = 'IDLE' | 'PLANNING' | 'EXECUTING_SWARM' | 'SYNTHESIZING' | 'COMPLETE' | 'FAILED';

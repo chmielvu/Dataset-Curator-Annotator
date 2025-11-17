@@ -1,5 +1,6 @@
+
 import Dexie, { Table } from 'dexie';
-import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry } from '../types';
+import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry, Draft } from '../types';
 
 // Helper function for client-side vector search
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -24,6 +25,7 @@ class VectorDB extends Dexie {
   chunks: Table<DocChunk, string>;
   dataset: Table<{ id: string; data: DatasetState }, string>;
   feedbackLog: Table<FeedbackLogEntry, number>; // The 'number' is the type of the primary key 'id'.
+  drafts: Table<Draft, string>;
 
   constructor() {
     super('MagdalenkaVectorDB');
@@ -43,11 +45,19 @@ class VectorDB extends Dexie {
       dataset: '&id',
       feedbackLog: '++id, timestamp', // ++id is auto-incrementing primary key, timestamp is an index.
     });
+    // Version 4 adds the drafts table
+    (this as any).version(4).stores({
+      chunks: 'id, source',
+      dataset: '&id',
+      feedbackLog: '++id, timestamp',
+      drafts: '&postText' // primary key on postText
+    });
     
     // Explicitly initialize table properties to satisfy TypeScript and help type inference.
     this.chunks = (this as any).table('chunks');
     this.dataset = (this as any).table('dataset');
     this.feedbackLog = (this as any).table('feedbackLog');
+    this.drafts = (this as any).table('drafts');
   }
 
 

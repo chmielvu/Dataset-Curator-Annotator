@@ -1,9 +1,9 @@
+
 // This is a server-side file.
 import { GoogleGenAI, Chat, FunctionDeclarationsTool, Type } from "@google/genai";
-import { specialistCuratorPrompt } from '../../utils/prompts';
+import { specialistCuratorPrompt, orchestratorPlannerPrompt, orchestratorSynthesizerPrompt } from '../../utils/prompts';
 import { v4 as uuidv4 } from 'uuid';
-import { DatasetState, FeedbackLogEntry, SwarmJobStatus, SwarmJobResult, SpecialistAgentResult } from '../../types';
-import { CLEAVAGE_IDS, TACTIC_IDS } from '../../utils/constants';
+import { DatasetState, SwarmJobStatus, SwarmJobResult, SpecialistAgentResult } from '../../types';
 
 // In-memory store for jobs. In a real application, use Redis, Firestore, etc.
 const jobStore = new Map<string, SwarmJobStatus>();
@@ -26,210 +26,142 @@ const logToJob = (jobId: string, message: string) => {
   }
 };
 
-// FIX: Add an explicit type for the discriminated union to help TypeScript's type narrowing.
-type ApoAnalysisResult = {
-    hasInsights: true;
-    mostProblematicCleavage: string | undefined;
-    mostMissedTactic: string | undefined;
-    summary: string;
-} | {
-    hasInsights: false;
-    summary: string;
-};
-
-// --- APO Analysis Logic ---
-// FIX: Add the explicit return type to the function signature.
-const analyzeApoFeedback = (feedback: FeedbackLogEntry[]): ApoAnalysisResult => {
-    if (!feedback || feedback.length === 0) {
-        return { hasInsights: false, summary: "No recent feedback to analyze." };
-    }
-
-    const cleavageCorrections: { [key: string]: number } = {};
-    const tacticCorrections: { [key: string]: number } = {};
-
-    for (const entry of feedback) {
-        // Analyze cleavage changes
-        entry.originalAnnotation.cleavages.forEach((originalScore, i) => {
-            const finalScore = entry.correctedAnnotation.cleavages[i];
-            if (Math.abs(originalScore - finalScore) > 0.2) { // Significant change
-                const cleavageId = CLEAVAGE_IDS[i];
-                cleavageCorrections[cleavageId] = (cleavageCorrections[cleavageId] || 0) + 1;
-            }
-        });
-
-        // Analyze tactic changes
-        const originalTactics = new Set(entry.originalAnnotation.tactics);
-        const finalTactics = new Set(entry.correctedAnnotation.tactics);
-        TACTIC_IDS.forEach(tactic => {
-            if (!originalTactics.has(tactic) && finalTactics.has(tactic)) {
-                tacticCorrections[tactic] = (tacticCorrections[tactic] || 0) + 1; // Tactic was missed
-            }
-        });
-    }
-
-    const getTopProblem = (corrections: { [key: string]: number }) => {
-        return Object.entries(corrections).sort(([, a], [, b]) => b - a)[0]?.[0];
-    };
-
-    const mostProblematicCleavage = getTopProblem(cleavageCorrections);
-    const mostMissedTactic = getTopProblem(tacticCorrections);
-
-    if (!mostProblematicCleavage && !mostMissedTactic) {
-        return { hasInsights: false, summary: "Analyzed feedback, no significant correction patterns found." };
+// Helper to call Gemini and handle responses
+async function callGemini(
+  ai: GoogleGenAI,
+  prompt: string,
+  model: string = "gemini-2.5-flash",
+  expectJson: boolean = false
+) {
+  try {
+    const config: any = { model, contents: prompt };
+    if (expectJson) {
+      config.config = { responseMimeType: "application/json" };
     }
     
-    const insights: ApoAnalysisResult = {
-        hasInsights: true,
-        mostProblematicCleavage,
-        mostMissedTactic,
-        summary: `Found patterns: Agents struggle with scoring '${mostProblematicCleavage}' and tend to miss identifying '${mostMissedTactic}'.`
-    };
+    const response = await ai.models.generateContent(config);
+    const text = response.text;
 
-    return insights;
-};
+    if (expectJson) {
+      try {
+        const cleanedText = text.replace(/^```json/, '').replace(/```$/, '').trim();
+        return JSON.parse(cleanedText);
+      } catch (e) {
+        console.error("Failed to parse JSON from model:", text);
+        throw new Error(`Model returned invalid JSON after cleaning. Content: ${text}`);
+      }
+    }
+    return text;
+  } catch(e: any) {
+    console.error(`Error calling Gemini model ${model}:`, e);
+    throw new Error(`API call to model ${model} failed: ${e.message}`);
+  }
+}
 
 
-// --- Orchestrator Logic ---
-async function runSwarmJob(jobId: string, datasetState: DatasetState, apoFeedback: FeedbackLogEntry[], manualQueries?: string, ragContext?: string) {
+// --- Program-of-Thought Swarm Logic ---
+async function runSwarmJob(jobId: string, datasetState: DatasetState, apoFeedback: any[], manualQueries?: string, ragContext?: string) {
   const job = jobStore.get(jobId);
   if (!job) return;
 
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     // === STAGE 1: PLANNING ===
     job.stage = 'PLANNING';
-    job.message = 'Analyzing dataset and feedback...';
-    logToJob(jobId, '[Orchestrator] Analyzing dataset for gaps and APO feedback...');
+    job.message = 'Orchestrator is analyzing dataset and creating a search plan...';
+    logToJob(jobId, '[Orchestrator] Analyzing dataset state, feedback, and manual queries to create a plan.');
     jobStore.set(jobId, job);
+
+    const plannerPrompt = orchestratorPlannerPrompt
+        .replace('{DATASET_STATE}', JSON.stringify(datasetState, null, 2))
+        .replace('{APO_FEEDBACK}', JSON.stringify(apoFeedback, null, 2))
+        .replace('{MANUAL_QUERIES}', manualQueries || "N/A");
+
+    const planResult = await callGemini(ai, plannerPrompt, "gemini-2.5-pro", true);
+    const agentTasks = planResult.plan;
     
-    const apoInsights = analyzeApoFeedback(apoFeedback);
-    logToJob(jobId, `[Orchestrator] APO Analysis: ${apoInsights.summary}`);
-
-    const getTopGaps = (data: { [key: string]: number }, count: number) => {
-      return Object.entries(data)
-        .sort(([, a], [, b]) => a - b)
-        .slice(0, count)
-        .map(([key]) => key);
-    };
-
-    const [leastRepresentedCleavage, secondLeastCleavage] = getTopGaps(datasetState.cleavages, 2);
-    const [leastRepresentedTactic, secondLeastTactic] = getTopGaps(datasetState.tactics, 2);
-
-    // Nuanced Task Decomposition based on deeper analysis
-    let balancerTask = `Your primary goal is to address the most significant gap in our dataset. The least-represented cleavage is '${leastRepresentedCleavage}'. Formulate high-precision queries to find clear examples of this cleavage in action.`;
-    if (apoInsights.hasInsights && apoInsights.mostProblematicCleavage === leastRepresentedCleavage) {
-        balancerTask += `\n**CRITICAL APO INSIGHT:** Human reviewers have recently corrected many annotations for '${leastRepresentedCleavage}', often because the agent's score was too high or misapplied. Therefore, you MUST prioritize finding **unambiguous, textbook examples**. Avoid subtle or borderline cases.`;
+    if (!agentTasks || !Array.isArray(agentTasks) || agentTasks.length !== 3) {
+      throw new Error('Orchestrator Planner failed to return a valid 3-agent plan.');
     }
+    logToJob(jobId, `[Orchestrator] Plan created for ${agentTasks.length} agents: Balancer, Explorer, Wildcard.`);
 
-    let explorerTask = `Your task is to find novel intersections. We need examples that combine the second-least represented cleavage, '${secondLeastCleavage}', with the least represented tactic, '${leastRepresentedTactic}'. Formulate queries using AND-style logic to discover posts where both are present.`;
-    if (apoInsights.hasInsights && apoInsights.mostMissedTactic === leastRepresentedTactic) {
-        explorerTask += `\n**CRITICAL APO INSIGHT:** Human reviewers have noted that agents frequently miss the '${leastRepresentedTactic}' tactic. Be extra vigilant for its presence, even if it's subtle. Your success depends on correctly identifying this specific tactic in combination with the cleavage.`;
-    }
-
-    let wildcardTask = `Your task is to act as an OSINT expert. Use your own reasoning and heuristic triggers to find posts related to new, emerging, or surprising narratives in Polish politics that might not be captured by gap-filling alone. Ensure the posts are high-quality and relevant.`;
-    if (apoInsights.hasInsights) {
-        wildcardTask += `\n**APO GUIDANCE:** Be cautious with topics that have previously led to ambiguous results requiring heavy correction. APO analysis indicates past struggles with accurately scoring '${apoInsights.mostProblematicCleavage}'. Prioritize clarity and avoid posts that are likely to be ambiguous.`;
-    }
-
-    let tasks = [
-        { name: 'Balancer', persona: 'Data-Gap Analyst', task: balancerTask },
-        { name: 'Explorer', persona: 'Creative Strategist', task: explorerTask },
-        { name: 'Wildcard', persona: 'OSINT Expert', task: wildcardTask }
-    ];
-
-    if (manualQueries) {
-      tasks = [{ name: 'Manual', persona: 'User Proxy', task: `Fulfill this high-priority manual query. Use RAG context if provided. Query: "${manualQueries}"`}, ...tasks.slice(0, 2)]
-    }
-    
-    logToJob(jobId, `[Orchestrator] Decomposing nuanced tasks for ${tasks.length} agents...`);
 
     // === STAGE 2: EXECUTING SWARM ===
     job.stage = 'EXECUTING_SWARM';
-    job.message = `Executing Swarm: 0/${tasks.length} agents complete...`;
+    job.message = `Dispatching ${agentTasks.length} specialist agents...`;
     job.progress = 0;
-    job.total = tasks.length;
-    logToJob(jobId, `[Orchestrator] Dispatching swarm of ${tasks.length} agents.`);
+    job.total = agentTasks.length;
+    logToJob(jobId, '[Orchestrator] Dispatching specialist agents to run in parallel.');
     jobStore.set(jobId, job);
     
     const sharedScratchpad = new Set<string>();
     
-    const agentPromises = tasks.map(agentTask => 
-      runSpecialistAgent(agentTask.name as any, agentTask.persona, agentTask.task, sharedScratchpad, ragContext)
-        .then(result => {
-          job.progress = (job.progress || 0) + 1;
-          job.message = `Executing Swarm: ${job.progress}/${job.total} agents complete...`;
-          logToJob(jobId, `[${result.agentName}] ${result.log}`);
-          jobStore.set(jobId, job);
-          return result;
-        })
+    const agentPromises = agentTasks.map((task: any) => 
+        runSpecialistAgent(task.agentName, task.persona, task.task, sharedScratchpad, ragContext)
+            .then(result => {
+                const currentJob = jobStore.get(jobId)!;
+                currentJob.progress = (currentJob.progress || 0) + 1;
+                logToJob(jobId, `[${result.agentName}] Agent finished. Found ${result.contributedPosts.length} posts. Report: "${result.log}"`);
+                jobStore.set(jobId, currentJob);
+                return result;
+            })
     );
+    
+    const agentResults = await Promise.all(agentPromises);
 
-    const agentResults = await Promise.allSettled(agentPromises);
 
     // === STAGE 3: SYNTHESIZING ===
     job.stage = 'SYNTHESIZING';
-    job.message = 'Synthesizing results...';
-    job.progress = undefined;
-    job.total = undefined;
-    logToJob(jobId, '[Orchestrator] All agents complete. Synthesizing results...');
+    job.message = 'Orchestrator is synthesizing agent findings...';
+    logToJob(jobId, '[Orchestrator] All agents complete. Aggregating and synthesizing results...');
     jobStore.set(jobId, job);
     
-    const successfulResults: SpecialistAgentResult[] = [];
-    agentResults.forEach(res => {
-      if (res.status === 'fulfilled') {
-        successfulResults.push(res.value);
-      } else {
-        console.error('An agent failed:', res.reason);
-        logToJob(jobId, `[Orchestrator] An agent failed: ${res.reason}`);
-      }
-    });
-
-    // Deduplicate and select final batch
-    const allPosts = new Map<string, string>();
-    successfulResults.forEach(res => {
-      res.contributedPosts.forEach(post => {
-        const postHash = post.slice(0, 100); // Simple hash for dedupe
-        if (!allPosts.has(postHash)) {
-          allPosts.set(postHash, post);
-        }
-      });
-    });
-
-    const finalPosts = Array.from(allPosts.values()).slice(0, 10); // Limit to 10
-    logToJob(jobId, `[Orchestrator] Synthesized ${finalPosts.length} unique posts from a pool of ${allPosts.size}.`);
-
-    // Global Reflection for trigger suggestions
-    const triggerSuggestions = successfulResults
-      .filter(r => r.contributedPosts.length > 0)
-      .map(r => `The ${r.agentName} agent had success with queries like: ${r.executedQueries}`);
+    const allPosts = agentResults.flatMap(r => r.contributedPosts);
     
-    if (triggerSuggestions.length > 0) {
-      logToJob(jobId, `[Orchestrator] Generated ${triggerSuggestions.length} new trigger suggestions.`);
+    if (allPosts.length === 0) {
+        throw new Error('Swarm failed to retrieve any posts. Please try refining your query or running again.');
     }
+    
+    const synthesizerPrompt = orchestratorSynthesizerPrompt
+        .replace('{RAW_POSTS}', JSON.stringify(allPosts));
+        
+    const finalResultJson = await callGemini(ai, synthesizerPrompt, "gemini-2.5-pro", true);
+    
+    const agentReports = agentResults.map(r => ({
+      agentName: r.agentName,
+      contributedPosts: r.contributedPosts,
+      executedQueries: r.executedQueries,
+      log: r.log
+    }));
 
     const finalResult: SwarmJobResult = {
-      finalPosts,
-      triggerSuggestions,
-      agentReports: successfulResults,
+      finalPosts: finalResultJson.finalPosts,
+      triggerSuggestions: finalResultJson.triggerSuggestions,
+      agentReports: agentReports,
     };
     
     job.stage = 'COMPLETE';
     job.message = 'Job complete.';
     job.result = finalResult;
-    logToJob(jobId, `[Orchestrator] Job complete. Returning batch of ${finalPosts.length} posts.`);
+    logToJob(jobId, `[Orchestrator] Synthesis complete. Final batch of ${finalResult.finalPosts.length} posts prepared.`);
     jobStore.set(jobId, job);
 
   } catch (error: any) {
-    job.stage = 'FAILED';
-    job.message = error.message;
-    logToJob(jobId, `[Orchestrator] CRITICAL ERROR: ${error.message}`);
-    jobStore.set(jobId, job);
+    if (job) {
+      job.stage = 'FAILED';
+      job.message = error.message;
+      logToJob(jobId, `[Orchestrator] CRITICAL ERROR: ${error.message}`);
+      jobStore.set(jobId, job);
+    }
     console.error(`Job ${jobId} failed:`, error);
   }
 }
 
+
 // --- Specialist Agent Logic ---
 async function runSpecialistAgent(
-  agentName: 'Balancer' | 'Explorer' | 'Wildcard' | 'Manual', 
+  agentName: SpecialistAgentResult['agentName'], 
   persona: string, 
   task: string, 
   scratchpad: Set<string>, 
@@ -261,8 +193,9 @@ async function runSpecialistAgent(
     const call = functionCalls[0];
     if (call.name === 'GoogleSearch') {
       executedQueries = call.args.queries?.join(', ') || "[]";
-      // Mock search results
-      const snippets = Array.from({ length: 5 }, (_, i) => `Mock post from ${agentName} agent #${i}: ${task.slice(0, 50)}...`);
+      // This is where a real Google Search API call would go.
+      // For this environment, we mock the results to simulate the agent's behavior.
+      const snippets = Array.from({ length: 5 }, (_, i) => `Mock post from ${agentName} agent #${i}: ${task.slice(0, 50)}... This is a simulated search result for query '${executedQueries}'.`);
       result = await chat.sendMessage({ message: { functionResponses: [{id: call.id, name: call.name, response: { result: { snippets }}}] } });
     } else {
       break;
@@ -274,7 +207,6 @@ async function runSpecialistAgent(
     const responseJson = JSON.parse(responseText.match(/\{.*\}/s)?.[0] || '{}');
     const posts = responseJson.retrieved_posts || [];
     
-    // Add to scratchpad
     posts.forEach((p: string) => scratchpad.add(p.slice(0, 100)));
 
     return {
@@ -311,7 +243,7 @@ export default async function handler(req: any, res: any) {
     jobStore.set(jobId, initialStatus);
 
     // Start the job in the background (don't await)
-    runSwarmJob(jobId, datasetState, apoFeedback, manualQueries, ragContext);
+    runSwarmJob(jobId, datasetState, apoFeedback || [], manualQueries, ragContext);
     
     res.status(202).json({ jobId });
 

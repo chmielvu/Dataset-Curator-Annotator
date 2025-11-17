@@ -20,8 +20,8 @@ export default async function handler(req: any, res: any) {
     
     const prompt = qcAgentPrompt
       .replace('{POST}', JSON.stringify(post))
-      .replace('{ANNOTATION}', JSON.stringify(annotation))
-      .replace('{CODEX}', JSON.stringify(CODEX));
+      .replace('{ANNOTATION}', JSON.stringify(annotation, null, 2))
+      .replace('{CODEX}', JSON.stringify(CODEX, null, 2));
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-pro",
@@ -31,7 +31,8 @@ export default async function handler(req: any, res: any) {
         }
     });
 
-    const responseJson = JSON.parse(response.text);
+    const cleanedText = response.text.replace(/^```json/, '').replace(/```$/, '').trim();
+    const responseJson = JSON.parse(cleanedText);
 
     return res.status(200).json({ qcResult: responseJson });
 

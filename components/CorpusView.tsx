@@ -59,10 +59,10 @@ const CorpusView: React.FC = () => {
   };
 
   return (
-    <section className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50 space-y-6">
+    <section className="p-4 sm:p-6 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Corpus Management (RAG)</h2>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">Upload text documents (`.txt`, `.md`, `.json`) to create a client-side vector database. This corpus can be used by agents for Retrieval-Augmented Generation.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">Document Archive (RAG)</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Upload text documents (`.txt`, `.md`, `.json`) to create a client-side vector database. This corpus can be used by agents for Retrieval-Augmented Generation.</p>
       </div>
 
       {initializationError && (
@@ -86,7 +86,7 @@ const CorpusView: React.FC = () => {
           </p>
           <div>
             <p className="font-semibold mb-1 text-sm">Chunk Content:</p>
-            <blockquote className="text-xs border-l-4 border-red-300 dark:border-red-500 pl-2 max-h-24 overflow-y-auto bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 p-2 rounded">
+            <blockquote className="text-xs border-l-4 border-red-300 dark:border-red-500 pl-2 max-h-24 overflow-y-auto bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-2 rounded">
               {chunkError.chunkText}
             </blockquote>
           </div>
@@ -99,7 +99,7 @@ const CorpusView: React.FC = () => {
             </button>
             <button 
               onClick={skipChunk} 
-              className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold rounded-md transition-colors"
+              className="px-3 py-1 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-md transition-colors"
             >
               Skip
             </button>
@@ -122,29 +122,29 @@ const CorpusView: React.FC = () => {
         </div>
       )}
 
-      <div className="p-6 bg-white dark:bg-gray-700/50 rounded-lg shadow-sm border dark:border-gray-600">
-        <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Ingest Document</h3>
+      <div className="p-6 bg-white dark:bg-slate-700/50 rounded-lg shadow-sm border dark:border-slate-600">
+        <h3 className="text-xl font-semibold mb-4 text-slate-900 dark:text-slate-100">Ingest Document</h3>
         <label 
-          className={`inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-500 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors ${isProcessing || !isReady ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          className={`inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-500 shadow-sm text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-500 transition-colors ${isProcessing || !isReady ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
         >
-          <svg className="w-5 h-5 mr-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+          <svg className="w-5 h-5 mr-2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
           </svg>
           <span>Upload & Embed Document</span>
           <input type="file" className="hidden" onChange={onFileSelected} disabled={isProcessing || !isReady} accept=".txt,.md,.csv,.json,.jsonl" />
         </label>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Files are chunked, embedded, and stored locally in your browser's database.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Files are chunked, embedded, and stored locally in your browser's database.</p>
       </div>
 
       <div>
-        <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Archive Summary</h3>
+        <h3 className="text-xl font-semibold mb-4 text-slate-900 dark:text-slate-100">Archive Summary</h3>
         {summary.length > 0 ? (
           <ul className="space-y-3">
             {summary.map(item => (
-              <li key={item.source} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700/50 rounded-md border dark:border-gray-600">
+              <li key={item.source} className="flex items-center justify-between p-3 bg-white dark:bg-slate-700/50 rounded-md border dark:border-slate-600">
                 <div>
-                  <p className="font-mono text-sm font-semibold text-gray-800 dark:text-gray-200 truncate max-w-md" title={item.source}>{item.source}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{item.chunkCount} chunk(s) stored</p>
+                  <p className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200 truncate max-w-md" title={item.source}>{item.source}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{item.chunkCount} chunk(s) stored</p>
                 </div>
                 <button onClick={() => handleDelete(item.source)} className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-medium px-3 py-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                   Delete
@@ -153,12 +153,12 @@ const CorpusView: React.FC = () => {
             ))}
           </ul>
         ) : (
-          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-12 text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2 13.5V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-2.5" />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-200">Corpus is empty</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Upload a document to build your RAG archive.</p>
+            <h3 className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-200">Corpus is empty</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Upload a document to build your RAG archive.</p>
           </div>
         )}
       </div>
