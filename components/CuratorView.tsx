@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { DatasetState, SwarmJobStatus, SwarmJobResult, SpecialistAgentResult } from '../types';
+import { DatasetState, SwarmJobResult, SpecialistAgentResult } from '../types';
 import { useEmbedding } from '../hooks/useEmbedding';
 import { db } from '../lib/dexie';
 
@@ -26,8 +26,7 @@ const getAgentStyles = (agentName: SpecialistAgentResult['agentName']) => {
 
 
 const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, onError }) => {
-  const [jobStatus, setJobStatus] = useState<SwarmJobStatus | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [isSwarmRunning, setIsSwarmRunning] = useState(false);
   const [manualPost, setManualPost] = useState('');
   const [manualQueries, setManualQueries] = useState('');
   const [lastSearchReport, setLastSearchReport] = useState<SwarmJobResult | null>(null);
@@ -43,55 +42,8 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
 
   
   const { isReady: isEmbeddingReady, isLoading: isEmbeddingLoading, generateEmbedding, initializationError } = useEmbedding();
-  const pollingIntervalRef = useRef<number | null>(null);
-  const logContainerRef = useRef<HTMLDivElement>(null);
 
-  const isLoading = jobStatus && jobStatus.stage !== 'IDLE' && jobStatus.stage !== 'COMPLETE' && jobStatus.stage !== 'FAILED';
   const isProcessingFile = batchStatus !== null;
-
-  // Polling logic
-  useEffect(() => {
-    if (jobId && isLoading) {
-      pollingIntervalRef.current = window.setInterval(async () => {
-        try {
-          const response = await fetch(`/api/curator-swarm?jobId=${jobId}`);
-          if (!response.ok) throw new Error('Failed to fetch job status.');
-
-          const status: SwarmJobStatus = await response.json();
-          setJobStatus(status);
-
-          if (status.stage === 'COMPLETE') {
-            onPostsFound(status.result!);
-            setLastSearchReport(status.result!);
-            setShowReport(true);
-            setJobId(null);
-            setJobStatus(null);
-          } else if (status.stage === 'FAILED') {
-            onError(`Swarm job failed: ${status.message}`);
-            setJobId(null);
-            setJobStatus(null);
-          }
-        } catch (error) {
-          console.error('Polling error:', error);
-          onError('Lost connection to the curation swarm.');
-          setJobId(null);
-          setJobStatus(null);
-        }
-      }, 2000);
-    }
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, [jobId, isLoading, onPostsFound, onError]);
-  
-    useEffect(() => {
-      if (logContainerRef.current) {
-        logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-      }
-    }, [jobStatus?.log]);
 
   const handleManualSubmit = () => {
     if (manualPost.trim()) {
@@ -211,49 +163,53 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   const handleRunAgent = async () => {
     onError(null);
     setShowReport(false);
-    setJobStatus({ jobId: '', stage: 'PLANNING', message: 'Initializing job...', log: [`[${new Date().toLocaleTimeString()}] [Orchestrator] Initializing job...`] });
+    setIsSwarmRunning(true);
 
-    let recentFeedback = [];
     try {
-      recentFeedback = await db.getRecentFeedback(5);
-    } catch (err) {
-      console.warn("Could not fetch APO feedback:", err);
-    }
-    
-    const bodyPayload: any = { datasetState, apoFeedback: recentFeedback };
+      let recentFeedback = [];
+      try {
+        recentFeedback = await db.getRecentFeedback(5);
+      } catch (err) {
+        console.warn("Could not fetch APO feedback:", err);
+      }
+      
+      const bodyPayload: any = { datasetState, apoFeedback: recentFeedback };
 
-    if (manualQueries.trim()) {
-      bodyPayload.manualQueries = manualQueries.trim();
-      if (isEmbeddingReady && generateEmbedding) {
-        try {
-          const queryEmbedding = await generateEmbedding(manualQueries.trim());
-          const searchResults = await db.findSimilar(queryEmbedding, 3);
-          if (searchResults.length > 0) {
-            bodyPayload.ragContext = searchResults.map((r, i) => `[Reference ${i+1}]: "${r.text}"`).join('\n');
+      if (manualQueries.trim()) {
+        bodyPayload.manualQueries = manualQueries.trim();
+        if (isEmbeddingReady && generateEmbedding) {
+          try {
+            const queryEmbedding = await generateEmbedding(manualQueries.trim());
+            const searchResults = await db.findSimilar(queryEmbedding, 3);
+            if (searchResults.length > 0) {
+              bodyPayload.ragContext = searchResults.map((r, i) => `[Reference ${i+1}]: "${r.text}"`).join('\n');
+            }
+          } catch (ragErr) {
+            console.warn("RAG search failed during job start, proceeding without it.", ragErr);
           }
-        } catch (ragErr) {
-          console.warn("RAG search failed during job start, proceeding without it.", ragErr);
         }
       }
-    }
 
-    try {
       const response = await fetch('/api/curator-swarm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload),
       });
 
+      const resultData = await response.json();
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: 'Server returned a non-JSON error.' }));
-        throw new Error(errData.error || 'Failed to start the swarm job.');
+        throw new Error(resultData.details || resultData.error || 'The swarm job failed to execute.');
       }
-      const { jobId: newJobId } = await response.json();
-      setJobId(newJobId);
+      
+      const result = resultData as SwarmJobResult;
+      onPostsFound(result);
+      setLastSearchReport(result);
+      setShowReport(true);
 
     } catch (err: any) {
       onError(err.message);
-      setJobStatus(null);
+    } finally {
+      setIsSwarmRunning(false);
     }
   };
   
@@ -272,7 +228,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   };
   
   const getButtonText = () => {
-    if (isLoading) return 'Swarm is Running...';
+    if (isSwarmRunning) return 'Swarm is Running...';
     return 'Run Curator Swarm (Batch of 10)';
   };
 
@@ -305,8 +261,8 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
       <div className="my-6 space-y-4 bg-white dark:bg-slate-900/30 p-4 rounded-lg border dark:border-slate-700/50">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             <div className="md:col-span-2">
-                <button onClick={handleRunAgent} disabled={!!isLoading || isProcessingFile} className="w-full px-4 py-3 text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20">
-                    {isLoading ? (
+                <button onClick={handleRunAgent} disabled={isSwarmRunning || isProcessingFile} className="w-full px-4 py-3 text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center font-semibold text-base shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20">
+                    {isSwarmRunning ? (
                         <><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         {getButtonText()}</>
                     ) : getButtonText()}
@@ -316,16 +272,6 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 <RagStatusIndicator />
             </div>
         </div>
-        {isLoading && jobStatus && (
-          <div className="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border dark:border-slate-700/50 space-y-2">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{jobStatus.message}</p>
-            <div ref={logContainerRef} className="h-48 overflow-y-auto bg-slate-900 dark:bg-black text-slate-200 font-mono text-xs p-3 rounded-md scroll-smooth border border-slate-700/50">
-              {(jobStatus.log || []).map((entry, index) => (
-                <p key={index} className="whitespace-pre-wrap animate-fade-in">{entry}</p>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -337,7 +283,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
             placeholder="e.g., 'Discuss the impact of Zielony Ład on small farms.'"
             className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
             rows={2}
-            disabled={!!isLoading || isProcessingFile}
+            disabled={isSwarmRunning || isProcessingFile}
           />
            <p className="text-xs text-slate-500 mt-1">The agent swarm will use this for RAG-augmented search.</p>
         </div>
@@ -353,11 +299,11 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 placeholder="Paste text here to send it directly to the Annotator."
                 className="w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition disabled:bg-slate-200 dark:disabled:bg-slate-700 bg-white dark:bg-slate-800"
                 rows={2}
-                disabled={!!isLoading || isProcessingFile}
+                disabled={isSwarmRunning || isProcessingFile}
               />
               <button 
                 onClick={handleManualSubmit} 
-                disabled={!manualPost.trim() || !!isLoading || isProcessingFile}
+                disabled={!manualPost.trim() || isSwarmRunning || isProcessingFile}
                 className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 disabled:bg-rose-400 dark:disabled:bg-rose-800"
               >
                 Submit
@@ -399,12 +345,12 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 </div>
             ) : (
               <>
-                <label className={`inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-500 shadow-sm text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-500 transition-colors ${isLoading || isProcessingFile ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                <label className={`inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-500 shadow-sm text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-500 transition-colors ${isSwarmRunning || isProcessingFile ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                     <span>Upload .jsonl Batch</span>
-                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={!!isLoading || isProcessingFile} accept=".jsonl" />
+                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={isSwarmRunning || isProcessingFile} accept=".jsonl" />
                 </label>
                 <p className="text-xs text-slate-500">Each line must be a JSON object with a "text" field, e.g., `{"text": "This is a post."}`</p>
               </>

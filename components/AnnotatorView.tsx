@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { Annotation } from '../types';
@@ -15,6 +14,7 @@ const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationCom
   const [isLoading, setIsLoading] = useState(false);
   const [completedAnnotation, setCompletedAnnotation] = useState<Annotation | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -32,13 +32,14 @@ const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationCom
       }
     };
     loadDraft();
-  }, [postText]);
+  }, [postText, completedAnnotation]);
   
   const handleAnnotate = async () => {
     setIsLoading(true);
     onError(null);
     setCompletedAnnotation(null);
     setSaveStatus('idle');
+    setJsonError(null);
     
     let recentFeedback = [];
     try {
@@ -92,6 +93,19 @@ const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationCom
       onAnnotationComplete(completedAnnotation);
     }
   };
+
+  const handleJsonEdit = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    try {
+      const newAnnotation = JSON.parse(newText);
+      setCompletedAnnotation(newAnnotation);
+      setJsonError(null); // Clear error if parse is successful
+    } catch (err) {
+      // If parsing fails, don't update the state
+      // This prevents the app from crashing with malformed JSON
+      setJsonError("Invalid JSON format. Please correct it to proceed.");
+    }
+  };
   
   const confidenceScore = completedAnnotation 
     ? (completedAnnotation.confidence ?? Math.max(...(completedAnnotation.cleavages || [0]))) 
@@ -102,7 +116,7 @@ const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationCom
       <section className="p-4 sm:p-6 border border-rose-200 dark:border-rose-500/30 rounded-lg bg-rose-50 dark:bg-rose-900/20 relative">
         <button onClick={onBack} className="absolute top-4 right-4 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">&larr; Cancel Batch</button>
         <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">2. Annotation Complete</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">The agent has generated an annotation. Review the summary below before proceeding to a full Quality Control check.</p>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">The agent has generated an annotation. Review, edit, and save the draft before proceeding to Quality Control.</p>
 
         <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600/50 rounded-lg shadow-sm">
           <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Post:</h3>
@@ -119,36 +133,47 @@ const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationCom
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">Confidence is based on the maximum cleavage activation score.</p>
           <div>
-            <details className="group">
-              <summary className="cursor-pointer text-sm text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white list-none flex items-center">
+            <details className="group" open>
+              <summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-black dark:hover:text-white list-none flex items-center">
                  <span className="group-open:rotate-90 transition-transform duration-200 mr-1">&#9656;</span>
-                 View Raw Annotation
+                 Edit Raw Annotation (HITL)
               </summary>
-              <pre className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-3 rounded-md overflow-x-auto border dark:border-slate-700">
-                {JSON.stringify(completedAnnotation, null, 2)}
-              </pre>
+              <textarea
+                className={`mt-2 text-xs font-mono bg-white dark:bg-slate-800 p-3 rounded-md overflow-x-auto border w-full h-64 resize-y ${
+                  jsonError
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-slate-300 dark:border-slate-700 focus:ring-rose-500'
+                } focus:ring-2`}
+                value={JSON.stringify(completedAnnotation, null, 2)}
+                onChange={handleJsonEdit}
+                aria-invalid={!!jsonError}
+              />
+              {jsonError && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{jsonError}</p>
+              )}
             </details>
           </div>
         </div>
 
         <div className="mt-6 flex flex-col sm:flex-row-reverse gap-2">
            <button 
-            onClick={handleProceedToQC} 
-            className="w-full sm:w-auto px-4 py-2 font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-colors"
+            onClick={handleProceedToQC}
+            disabled={!!jsonError}
+            className="w-full sm:w-auto px-4 py-2 font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-colors disabled:bg-rose-300 dark:disabled:bg-rose-800 disabled:cursor-not-allowed"
           >
             Proceed to QC &rarr;
           </button>
           <button 
             onClick={handleSaveDraft} 
-            disabled={saveStatus !== 'idle'}
-            className="w-full sm:w-auto px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50"
+            disabled={saveStatus !== 'idle' || !!jsonError}
+            className="w-full sm:w-auto px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saveStatus === 'saving' && 'Saving...'}
             {saveStatus === 'saved' && 'Draft Saved!'}
             {saveStatus === 'idle' && 'Save Draft'}
           </button>
           <button 
-            onClick={() => { setCompletedAnnotation(null); setSaveStatus('idle'); }} 
+            onClick={() => { setCompletedAnnotation(null); setSaveStatus('idle'); setJsonError(null); }} 
             className="w-full sm:w-auto px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
           >
             Re-run Annotation

@@ -99,18 +99,6 @@ export interface QcAgentResult {
 
 
 // ---- Swarm Curator Architecture ----
-export type SwarmJobStage = 'IDLE' | 'PLANNING' | 'EXECUTING_SWARM' | 'SYNTHESIZING' | 'COMPLETE' | 'FAILED';
-
-export interface SwarmJobStatus {
-  jobId: string;
-  stage: SwarmJobStage;
-  message: string;
-  progress?: number;
-  total?: number;
-  result?: SwarmJobResult | null;
-  log?: string[];
-}
-
 export interface SpecialistAgentResult {
   agentName: 'Balancer' | 'Explorer' | 'Wildcard' | 'Manual';
   contributedPosts: string[];
