@@ -6,7 +6,21 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magdalenka Annotation Pipeline</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'russo': ['"Russo One"', 'sans-serif'],
+            },
+          }
+        }
+      }
+    </script>
   <script type="importmap">
 {
   "imports": {
@@ -15,12 +29,14 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "dexie": "https://aistudiocdn.com/dexie@^4.0.7"
+    "dexie": "https://aistudiocdn.com/dexie@^4.0.7",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/"
   }
 }
 </script>
 </head>
-  <body class="bg-gray-100 text-gray-800">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

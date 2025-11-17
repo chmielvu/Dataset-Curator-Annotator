@@ -12,5 +12,6 @@ const initializeCounts = (keys: string[]): { [key: string]: number } => {
 export const INITIAL_DATASET_STATE: DatasetState = {
   cleavages: initializeCounts(CLEAVAGE_IDS),
   tactics: initializeCounts(TACTIC_IDS),
-  emotions: initializeCounts(EMOTION_IDS)
+  emotions: initializeCounts(EMOTION_IDS),
+  total_annotations_processed: 0,
 };
