@@ -505,3 +505,181 @@ except Exception as e:
     # If any error occurs, print a clear error message to standard output
     print(f"ERROR: {str(e)}")
 `;
+
+// NEW PYTHON-BASED SWARM SCRIPT
+export const pythonSwarmScript = `
+import json
+import sys
+import os
+
+# The GAIS environment will provide this module if the tool is enabled
+try:
+    # This is a special module provided by the execution environment
+    from google_search import search as google_search 
+except ImportError:
+    print("FATAL: google_search tool not available.", file=sys.stderr)
+    # Create a mock function to prevent crashes, but log the error
+    def google_search(queries=None):
+        print(f"MOCK SEARCH: {queries}", file=sys.stderr)
+        return {"results": [{"snippet": f"Mock result for query: {q}"} for q in queries]}
+
+# --- 1. Load Data from Placeholders ---
+# These JSON strings are injected by the Node.js controller
+DATASET_STATE = json.loads("""{DATASET_STATE}""")
+APO_FEEDBACK = json.loads("""{APO_FEEDBACK}""")
+MANUAL_QUERIES = """{MANUAL_QUERIES}"""
+RAG_CONTEXT = """{RAG_CONTEXT}"""
+
+# --- 2. Orchestrator: Planning Phase ---
+def plan_tasks(dataset_state, apo_feedback, manual_queries):
+    """
+    Creates the task list for the specialist agents.
+    In a more advanced version, this function would itself call Gemini.
+    For this version, we use a simplified logic.
+    """
+    print("[Python Swarm] Planning tasks...", file=sys.stderr)
+    
+    task_list = []
+    
+    if manual_queries:
+        print(f"[Python Swarm] Prioritizing manual query: {manual_queries}", file=sys.stderr)
+        task_list.append({
+            "name": "Manual",
+            "persona": "User-Directed Researcher",
+            "task": f"Fulfill this high-priority manual query. Use RAG context if provided. Query: \\"{manual_queries}\\""
+        })
+
+    # Simplified gap analysis (example)
+    # A real implementation would parse dataset_state more deeply
+    cleavage_counts = dataset_state.get('cleavages', {})
+    if cleavage_counts:
+        least_represented = min(cleavage_counts, key=cleavage_counts.get)
+        task_list.append({
+            "name": "Balancer",
+            "persona": "Data-Gap Analyst",
+            "task": f"The dataset is low on '{least_represented}'. Find clear examples."
+        })
+
+    # Add a creative agent
+    task_list.append({
+        "name": "Explorer",
+        "persona": "Creative Strategist",
+        "task": "Find novel intersections of 'tactic_whataboutism' and 'emotion_anger' in recent discourse."
+    })
+    
+    # Ensure there's always at least one agent if others fail to generate
+    if not task_list:
+        task_list.append({
+            "name": "Wildcard",
+            "persona": "OSINT Expert",
+            "task": "Find new or emerging narratives in Polish politics not captured by other agents."
+        })
+
+    print(f"[Python Swarm] Planning complete. {len(task_list)} tasks created.", file=sys.stderr)
+    return task_list[:3] # Limit to 3 agents
+
+# --- 3. Specialist Agent Logic ---
+def run_specialist_agent(agent_name, persona, task, rag_context):
+    """
+    Simulates a specialist agent.
+    It generates search queries and executes them using the 'google_search' tool.
+    """
+    print(f"[Python Swarm: {agent_name}] Agent activated. Task: {task}", file=sys.stderr)
+    
+    # This is a simplified "agent" for demonstration.
+    # It just derives queries from its task description.
+    queries = [
+        f"{task} site:x.com OR site:wykop.pl",
+        f"{persona} Polish politics {task.split()[-1]}"
+    ]
+    
+    if rag_context:
+         print(f"[Python Swarm: {agent_name}] Using RAG context.", file=sys.stderr)
+         queries.append(f"{rag_context} {task}")
+
+    try:
+        # This is a real tool call, executed by the GAIS sandbox
+        search_results = google_search(queries=queries)
+        results = search_results.get("results", [])
+        
+        # Simple post "extraction" from snippets
+        contributed_posts = [res.get('snippet', '') for res in results if res.get('snippet')]
+
+        print(f"[Python Swarm: {agent_name}] Agent complete. Found {len(contributed_posts)} posts.", file=sys.stderr)
+        
+        return {
+            "agentName": agent_name,
+            "contributedPosts": contributed_posts,
+            "executedQueries": ", ".join(queries),
+            "log": f"Agent executed {len(queries)} queries and found {len(contributed_posts)} potential posts."
+        }
+    except Exception as e:
+        print(f"[Python Swarm: {agent_name}] Agent FAILED: {e}", file=sys.stderr)
+        return {
+            "agentName": agent_name,
+            "contributedPosts": [],
+            "executedQueries": ", ".join(queries),
+            "log": f"Agent failed to execute search: {e}"
+        }
+
+# --- 4. Orchestrator: Synthesis Phase ---
+def synthesize_results(agent_reports):
+    """
+    Aggregates, deduplicates, and selects the final post batch.
+    """
+    print(f"[Python Swarm] Synthesizing results from {len(agent_reports)} agents...", file=sys.stderr)
+    all_posts = []
+    for report in agent_reports:
+        all_posts.extend(report["contributedPosts"])
+    
+    if not all_posts:
+        # If no real posts were found, generate placeholders
+        all_posts = ["Swarm failed to find real-time results. This is a placeholder.", "Please try a different query or check agent logs."]
+    
+    # Simple deduplication
+    unique_posts = list(dict.fromkeys(all_posts))
+    final_batch = unique_posts[:10] # Limit to 10
+    
+    # Create trigger suggestions
+    trigger_suggestions = [
+        f"Query for '{report['agentName']}' was successful: {report['executedQueries']}"
+        for report in agent_reports if report["contributedPosts"]
+    ]
+    
+    final_result = {
+        "finalPosts": final_batch,
+        "triggerSuggestions": trigger_suggestions,
+        "agentReports": agent_reports
+    }
+    
+    print(f"[Python Swarm] Synthesis complete. Final batch size: {len(final_batch)}", file=sys.stderr)
+    return final_result
+
+# --- 5. Main Execution ---
+def main():
+    try:
+        # 1. Plan
+        tasks = plan_tasks(DATASET_STATE, APO_FEEDBACK, MANUAL_QUERIES)
+        
+        # 2. Execute Swarm
+        agent_reports = []
+        for task in tasks:
+            report = run_specialist_agent(task["name"], task["persona"], task["task"], RAG_CONTEXT)
+            agent_reports.append(report)
+            
+        # 3. Synthesize
+        final_result = synthesize_results(agent_reports)
+        
+        # 4. Print the final JSON output to stdout
+        # This is what the Node.js controller will receive
+        print(json.dumps(final_result, indent=2))
+        
+    except Exception as e:
+        # If the script crashes, print the error to stderr
+        print(f"FATAL SCRIPT ERROR: {e}", file=sys.stderr)
+        # Print an error JSON to stdout
+        print(json.dumps({"error": "Python swarm script failed", "details": str(e)}))
+
+if __name__ == "__main__":
+    main()
+`;

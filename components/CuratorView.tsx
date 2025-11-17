@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { DatasetState, SwarmJobStatus, SwarmJobResult, SpecialistAgentResult } from '../types';
+import { DatasetState, SwarmJobResult, SpecialistAgentResult } from '../types';
 import { useEmbedding } from '../hooks/useEmbedding';
 import { db } from '../lib/dexie';
 
@@ -26,8 +26,8 @@ const getAgentStyles = (agentName: SpecialistAgentResult['agentName']) => {
 
 
 const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, onError }) => {
-  const [jobStatus, setJobStatus] = useState<SwarmJobStatus | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [manualPost, setManualPost] = useState('');
   const [manualQueries, setManualQueries] = useState('');
   const [lastSearchReport, setLastSearchReport] = useState<SwarmJobResult | null>(null);
@@ -43,55 +43,8 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
 
   
   const { isReady: isEmbeddingReady, isLoading: isEmbeddingLoading, generateEmbedding, initializationError } = useEmbedding();
-  const pollingIntervalRef = useRef<number | null>(null);
-  const logContainerRef = useRef<HTMLDivElement>(null);
-
-  const isLoading = jobStatus && jobStatus.stage !== 'IDLE' && jobStatus.stage !== 'COMPLETE' && jobStatus.stage !== 'FAILED';
-  const isProcessingFile = batchStatus !== null;
-
-  // Polling logic
-  useEffect(() => {
-    if (jobId && isLoading) {
-      pollingIntervalRef.current = window.setInterval(async () => {
-        try {
-          const response = await fetch(`/api/curator-swarm?jobId=${jobId}`);
-          if (!response.ok) throw new Error('Failed to fetch job status.');
-
-          const status: SwarmJobStatus = await response.json();
-          setJobStatus(status);
-
-          if (status.stage === 'COMPLETE') {
-            onPostsFound(status.result!);
-            setLastSearchReport(status.result!);
-            setShowReport(true);
-            setJobId(null);
-            setJobStatus(null);
-          } else if (status.stage === 'FAILED') {
-            onError(`Swarm job failed: ${status.message}`);
-            setJobId(null);
-            setJobStatus(null);
-          }
-        } catch (error) {
-          console.error('Polling error:', error);
-          onError('Lost connection to the curation swarm.');
-          setJobId(null);
-          setJobStatus(null);
-        }
-      }, 2000);
-    }
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, [jobId, isLoading, onPostsFound, onError]);
   
-    useEffect(() => {
-      if (logContainerRef.current) {
-        logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-      }
-    }, [jobStatus?.log]);
+  const isProcessingFile = batchStatus !== null;
 
   const handleManualSubmit = () => {
     if (manualPost.trim()) {
@@ -211,10 +164,12 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   const handleRunAgent = async () => {
     onError(null);
     setShowReport(false);
-    setJobStatus({ jobId: '', stage: 'PLANNING', message: 'Initializing job...', log: [`[${new Date().toLocaleTimeString()}] [Orchestrator] Initializing job...`] });
+    setIsLoading(true);
+    setStatusMessage('Initializing swarm...');
 
     let recentFeedback = [];
     try {
+      setStatusMessage('Analyzing recent APO feedback...');
       recentFeedback = await db.getRecentFeedback(5);
     } catch (err) {
       console.warn("Could not fetch APO feedback:", err);
@@ -226,6 +181,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
       bodyPayload.manualQueries = manualQueries.trim();
       if (isEmbeddingReady && generateEmbedding) {
         try {
+          setStatusMessage('Performing RAG search...');
           const queryEmbedding = await generateEmbedding(manualQueries.trim());
           const searchResults = await db.findSimilar(queryEmbedding, 3);
           if (searchResults.length > 0) {
@@ -238,22 +194,29 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
     }
 
     try {
+      setStatusMessage('Engaging curator swarm... (This may take up to a minute)');
       const response = await fetch('/api/curator-swarm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload),
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: 'Server returned a non-JSON error.' }));
-        throw new Error(errData.error || 'Failed to start the swarm job.');
+        throw new Error(data.details || data.error || 'The swarm failed to return a valid result.');
       }
-      const { jobId: newJobId } = await response.json();
-      setJobId(newJobId);
-
+      
+      const swarmResult = data.swarmResult as SwarmJobResult;
+      
+      onPostsFound(swarmResult);
+      setLastSearchReport(swarmResult);
+      setShowReport(true);
+      
     } catch (err: any) {
       onError(err.message);
-      setJobStatus(null);
+    } finally {
+      setIsLoading(false);
+      setStatusMessage(null);
     }
   };
   
@@ -272,7 +235,7 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
   };
   
   const getButtonText = () => {
-    if (isLoading) return 'Swarm is Running...';
+    if (isLoading) return statusMessage || 'Swarm is Running...';
     return 'Run Curator Swarm (Batch of 10)';
   };
 
@@ -316,14 +279,9 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                 <RagStatusIndicator />
             </div>
         </div>
-        {isLoading && jobStatus && (
+        {isLoading && (
           <div className="p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border dark:border-slate-700/50 space-y-2">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{jobStatus.message}</p>
-            <div ref={logContainerRef} className="h-48 overflow-y-auto bg-slate-900 dark:bg-black text-slate-200 font-mono text-xs p-3 rounded-md scroll-smooth border border-slate-700/50">
-              {(jobStatus.log || []).map((entry, index) => (
-                <p key={index} className="whitespace-pre-wrap animate-fade-in">{entry}</p>
-              ))}
-            </div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 animate-pulse">{statusMessage}</p>
           </div>
         )}
       </div>
