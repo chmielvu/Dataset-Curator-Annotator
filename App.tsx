@@ -61,11 +61,15 @@ function App() {
 
     let qcFeedback = qcData.qcAgentFeedback || 'Manual user correction without QC agent run.';
 
-    // APO: Save feedback if edited, now with detailed change summary
-    if (qcData.wasEdited) {
-      try {
-        const original = qcData.originalAnnotation;
-        const final = qcData.finalAnnotation;
+    // APO: Save feedback. This is the critical loop.
+    // We log feedback whether it was a manual edit OR a simple approval
+    // of the QC agent's findings.
+    try {
+      const original = qcData.originalAnnotation;
+      const final = qcData.finalAnnotation;
+      
+      if (qcData.wasEdited) {
+        // --- Feedback from Manual Human Edit ---
         const changes: string[] = [];
         
         // A simple string comparison for arrays. For more complex objects, a deep-diff library would be better.
@@ -93,19 +97,24 @@ function App() {
           : 'Manual edit made without changing core annotation fields.';
           
         qcFeedback = feedbackSummary; // Use this more detailed feedback
-  
-        await db.addFeedback({
-          timestamp: new Date().toISOString(),
-          postText: currentPost!,
-          originalAnnotation: qcData.originalAnnotation,
-          correctedAnnotation: qcData.finalAnnotation,
-          qcFeedback: qcFeedback, // Save detailed feedback
-        });
-      } catch (err) {
-        console.error("Failed to save APO feedback:", err);
-        // Don't block the UI for this, just log it
       }
+      // ELSE: If no edits, qcFeedback retains the QC Agent's feedback.
+
+      // --- Log to Dexie ---
+      // This now correctly logs EITHER the human edit summary OR the QC agent's original feedback.
+      await db.addFeedback({
+        timestamp: new Date().toISOString(),
+        postText: currentPost!,
+        originalAnnotation: qcData.originalAnnotation,
+        correctedAnnotation: qcData.finalAnnotation,
+        qcFeedback: qcFeedback, 
+      });
+
+    } catch (err) {
+      console.error("Failed to save APO feedback:", err);
+      // Don't block the UI for this, just log it
     }
+    
 
     setDatasetState(prevState => {
       const newState: DatasetState = JSON.parse(JSON.stringify(prevState));
