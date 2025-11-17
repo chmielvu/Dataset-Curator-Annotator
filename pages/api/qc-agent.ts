@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
       .replace('{CODEX}', JSON.stringify(CODEX, null, 2));
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-2.5-pro", // Pro is better for complex JSON and reasoning
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -33,6 +33,11 @@ export default async function handler(req: any, res: any) {
 
     const cleanedText = response.text.replace(/^```json/, '').replace(/```$/, '').trim();
     const responseJson = JSON.parse(cleanedText);
+
+    // Ensure ui_suggestions is always an array
+    if (!responseJson.ui_suggestions) {
+        responseJson.ui_suggestions = [];
+    }
 
     return res.status(200).json({ qcResult: responseJson });
 

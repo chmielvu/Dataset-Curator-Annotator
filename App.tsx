@@ -3,7 +3,7 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import CuratorView from './components/CuratorView';
 import AnnotatorView from './components/AnnotatorView';
-import QCView from './components/QCView';
+import VerificationView from './components/VerificationView';
 import CorpusView from './components/CorpusView';
 import { DatasetState, Annotation, AppView, QCCompletionData, SwarmJobResult } from './types';
 import { INITIAL_DATASET_STATE } from './utils/initialState';
@@ -13,6 +13,8 @@ import ThemeToggle from './components/ThemeToggle';
 import DashboardView from './components/DashboardView';
 import PolishEagleIcon from './components/PolishEagleIcon';
 import PipelineStepper from './components/PipelineStepper';
+import { getTacticId, getEmotionId } from './utils/codex';
+
 
 function App() {
   const [datasetState, setDatasetState] = useState<DatasetState>(INITIAL_DATASET_STATE);
@@ -27,7 +29,21 @@ function App() {
   useEffect(() => {
     const loadState = async () => {
       try {
-        const savedState = await db.dataset.get('currentState');
+        let savedState = await db.dataset.get('currentState');
+        
+        // --- NEW: First-time bootstrapping from starter-dataset.json ---
+        const isFirstRun = !(await db.dataset.get('hasBootstrapped'));
+        if (isFirstRun && !savedState) {
+          console.log("First run detected. Bootstrapping from starter-dataset.json...");
+          const response = await fetch('/starter-dataset.json');
+          const starterAnnotations: Annotation[] = await response.json();
+          const bootstrappedState = processAnnotationsToState(starterAnnotations, INITIAL_DATASET_STATE);
+          await db.dataset.put({ id: 'currentState', data: bootstrappedState });
+          await db.dataset.put({ id: 'hasBootstrapped', data: { value: true } as any });
+          savedState = { id: 'currentState', data: bootstrappedState };
+        }
+        // --- End bootstrapping ---
+
         if (savedState) {
           const mergedState = { ...INITIAL_DATASET_STATE, ...savedState.data };
           setDatasetState(mergedState);
@@ -55,26 +71,60 @@ function App() {
     };
     saveState();
   }, [datasetState, isStateLoaded]);
+  
+  // New helper function to process annotations and update state
+  const processAnnotationsToState = (annotations: Annotation[], baseState: DatasetState): DatasetState => {
+      const newState = JSON.parse(JSON.stringify(baseState));
+      
+      annotations.forEach(finalAnnotation => {
+          if (!finalAnnotation || typeof finalAnnotation !== 'object') return;
+          
+          if (finalAnnotation.labels && Array.isArray(finalAnnotation.labels)) {
+            finalAnnotation.labels.forEach((score, index) => {
+                if (score > 0.5) {
+                    const cleavageId = CLEAVAGE_IDS[index];
+                    if (cleavageId && newState.cleavages.hasOwnProperty(cleavageId)) {
+                        newState.cleavages[cleavageId]++;
+                    }
+                }
+            });
+          }
+          
+          if (finalAnnotation.tactics && Array.isArray(finalAnnotation.tactics)) {
+              finalAnnotation.tactics.forEach(tacticName => {
+                  const tacticId = getTacticId(tacticName);
+                  if (tacticId && newState.tactics.hasOwnProperty(tacticId)) {
+                      newState.tactics[tacticId]++;
+                  }
+              });
+          }
+          
+          if (finalAnnotation.emotion_fuel) {
+              const emotionId = getEmotionId(finalAnnotation.emotion_fuel);
+              if (emotionId && newState.emotions.hasOwnProperty(emotionId)) {
+                  newState.emotions[emotionId]++;
+              }
+          }
+      });
 
-  const handleQCComplete = async (qcData: QCCompletionData) => {
+      newState.total_annotations_processed = (baseState.total_annotations_processed || 0) + annotations.length;
+      return newState;
+  };
+
+
+  const handleVerificationComplete = async (qcData: QCCompletionData) => {
     setError(null);
 
     let qcFeedback = qcData.qcAgentFeedback || 'Manual user correction without QC agent run.';
-
-    // APO: Save feedback. This is the critical loop.
-    // We log feedback whether it was a manual edit OR a simple approval
-    // of the QC agent's findings.
+    
     try {
       const original = qcData.originalAnnotation;
       const final = qcData.finalAnnotation;
       
       if (qcData.wasEdited) {
-        // --- Feedback from Manual Human Edit ---
         const changes: string[] = [];
-        
-        // A simple string comparison for arrays. For more complex objects, a deep-diff library would be better.
-        if (JSON.stringify(original.cleavages) !== JSON.stringify(final.cleavages)) {
-          changes.push('cleavage scores');
+        if (JSON.stringify(original.labels) !== JSON.stringify(final.labels)) {
+          changes.push('labels scores');
         }
         if (JSON.stringify([...original.tactics].sort()) !== JSON.stringify([...final.tactics].sort())) {
           changes.push('tactics');
@@ -96,12 +146,9 @@ function App() {
           ? `Manual user correction. Fields changed: ${changes.join(', ')}.`
           : 'Manual edit made without changing core annotation fields.';
           
-        qcFeedback = feedbackSummary; // Use this more detailed feedback
+        qcFeedback = feedbackSummary;
       }
-      // ELSE: If no edits, qcFeedback retains the QC Agent's feedback.
 
-      // --- Log to Dexie ---
-      // This now correctly logs EITHER the human edit summary OR the QC agent's original feedback.
       await db.addFeedback({
         timestamp: new Date().toISOString(),
         postText: currentPost!,
@@ -112,37 +159,9 @@ function App() {
 
     } catch (err) {
       console.error("Failed to save APO feedback:", err);
-      // Don't block the UI for this, just log it
     }
     
-
-    setDatasetState(prevState => {
-      const newState: DatasetState = JSON.parse(JSON.stringify(prevState));
-      const finalAnnotation = qcData.finalAnnotation;
-
-      finalAnnotation.cleavages.forEach((score, index) => {
-        if (score > 0.5) {
-          const cleavageId = CLEAVAGE_IDS[index];
-          if (cleavageId && newState.cleavages.hasOwnProperty(cleavageId)) {
-            newState.cleavages[cleavageId]++;
-          }
-        }
-      });
-      
-      finalAnnotation.tactics.forEach(tacticId => {
-        if (newState.tactics.hasOwnProperty(tacticId)) {
-          newState.tactics[tacticId]++;
-        }
-      });
-
-      if (newState.emotions.hasOwnProperty(finalAnnotation.emotion_fuel)) {
-        newState.emotions[finalAnnotation.emotion_fuel]++;
-      }
-
-      newState.total_annotations_processed++;
-
-      return newState;
-    });
+    setDatasetState(prevState => processAnnotationsToState([qcData.finalAnnotation], prevState));
 
     // Batch Processing: Check for next item in queue
     if (queueIndex < annotationQueue.length - 1) {
@@ -164,35 +183,8 @@ function App() {
   const handleDatasetUpload = (annotations: Annotation[]) => {
     setError(null);
     try {
-        const newState = JSON.parse(JSON.stringify(INITIAL_DATASET_STATE));
-        
-        annotations.forEach(finalAnnotation => {
-            if (!finalAnnotation || typeof finalAnnotation !== 'object') return;
-            
-            if (finalAnnotation.cleavages && Array.isArray(finalAnnotation.cleavages)) {
-              finalAnnotation.cleavages.forEach((score, index) => {
-                  if (score > 0.5) {
-                      const cleavageId = CLEAVAGE_IDS[index];
-                      if (cleavageId && newState.cleavages.hasOwnProperty(cleavageId)) {
-                          newState.cleavages[cleavageId]++;
-                      }
-                  }
-              });
-            }
-            
-            if (finalAnnotation.tactics && Array.isArray(finalAnnotation.tactics)) {
-                finalAnnotation.tactics.forEach(tacticId => {
-                    if (tacticId && newState.tactics.hasOwnProperty(tacticId)) {
-                        newState.tactics[tacticId]++;
-                    }
-                });
-            }
-            
-            if (finalAnnotation.emotion_fuel && newState.emotions.hasOwnProperty(finalAnnotation.emotion_fuel)) {
-                newState.emotions[finalAnnotation.emotion_fuel]++;
-            }
-        });
-
+        const newState = processAnnotationsToState(annotations, INITIAL_DATASET_STATE);
+        // This is a full reset, so we replace the state entirely
         newState.total_annotations_processed = annotations.length;
         setDatasetState(newState);
     } catch (e: any) {
@@ -216,7 +208,7 @@ function App() {
   const handleAnnotationComplete = (annotation: Annotation) => {
     setError(null);
     setCurrentAnnotation(annotation);
-    setCurrentView('qc');
+    setCurrentView('verification');
   };
 
   const handleError = (errorMessage: string | null) => {
@@ -264,7 +256,7 @@ function App() {
     );
   }
 
-  const isPipelineView = currentView === 'curator' || currentView === 'annotator' || currentView === 'qc';
+  const isPipelineView = currentView === 'curator' || currentView === 'annotator' || currentView === 'verification';
   const batchProgress = annotationQueue.length > 0 ? `(Post ${queueIndex + 1} of ${annotationQueue.length})` : '';
 
   return (
@@ -322,11 +314,11 @@ function App() {
             onError={handleError}
           />
         )}
-        {currentView === 'qc' && currentPost && currentAnnotation && (
-          <QCView
+        {currentView === 'verification' && currentPost && currentAnnotation && (
+          <VerificationView
             postText={currentPost}
             annotation={currentAnnotation}
-            onQCComplete={handleQCComplete}
+            onVerificationComplete={handleVerificationComplete}
             onBack={() => {
               setCurrentAnnotation(null);
               setCurrentView('annotator');

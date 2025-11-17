@@ -17,7 +17,7 @@ const CorpusView: React.FC = () => {
       const s = await db.getArchiveSummary();
       setSummary(s);
     } catch (e) {
-      setError('Could not access the document archive. This can happen if IndexedDB is disabled in your browser.');
+      setError('Could not access the document archive. This can happen if IndexedDB is disabled, in private browsing mode, or if browser permissions are too strict.');
       setSummary([]);
     }
   }, []);
@@ -53,7 +53,7 @@ const CorpusView: React.FC = () => {
         await db.deleteSource(sourceName);
         refreshSummary();
       } catch (e) {
-        setError('Failed to delete the document.');
+        setError(`Failed to delete '${sourceName}'. This could be a browser permission issue or a problem with the local database.`);
       }
     }
   };

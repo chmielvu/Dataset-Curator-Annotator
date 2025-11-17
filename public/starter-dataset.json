@@ -1,0 +1,6 @@
+
+[
+  {"text": "Katyń 🇷🇺 - Rosjanie przeprosili za Katyń... Tymczasem : Ukraina 🇺🇦 - do tej pory nie przeprosili za Wołyń... I Kto jest tak naprawdę wrogiem Polski❓ …Ile płacą ci hrywien ruska onuco? Za 3..2..1 🫣", "labels": [0.9, 0.7, 0.0, 0.0, 0.0], "tactics": ["Whataboutism", "Ad Hominem"], "emotion_fuel": "Moral Outrage", "stance_target": "Relacje Polska-Ukraina (historia)", "stance_label": "AGAINST"},
+  {"text": "Jesteśmy świadkami zwijania polskiej narracji historycznej... wspólnie z Niemcami będziemy udawać, że przymiotnik \"niemiecki\"... wspólnie z Ukrainą Ludobójstwo Wołyńskie... nazwiemy... konfliktem... Historię dla naszych dzieci napiszą więc Niemcy i Ukraińcy... Tak nie buduje się lepszej przyszłości. Boże chroń Polskę 🇵🇱", "labels": [0.95, 0.8, 0.0, 0.0, 0.0], "tactics": ["Appeal to Emotion", "Loaded Language", "False Dichotomy"], "emotion_fuel": "Fear of Domination", "stance_target": "Polska polityka historyczna", "stance_label": "AGAINST"},
+  {"text": "Przeprosin i przyznania się do winy o Katyń nie słyszałeś? Wołyń,wypieranie prawdy i robienie z Polaków współwinnych tej bestialskiej zbrodni.", "labels": [0.9, 0.3, 0.0, 0.0, 0.0], "tactics": ["Whataboutism", "Loaded Language"], "emotion_fuel": "Moral Outrage", "stance_target": "Pamięć o Wołyniu", "stance_label": "AGAINST"}
+]

@@ -1,17 +1,21 @@
 
 // This is a server-side file.
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, FunctionDeclarationsTool, Type } from "@google/genai";
 import { pythonSwarmScript } from '../../utils/prompts';
 import { SwarmJobResult } from '../../types';
 
 // Define the GAIS-native tools we will make available to our Python script
-const CODE_EXECUTION_TOOL = {
+const CODE_EXECUTION_TOOL: FunctionDeclarationsTool = {
   codeExecution: {}
 };
 
 // This tool provides the 'google_search' module to the Python sandbox
-const GROUNDING_TOOL = {
-  googleSearch: {}
+const GROUNDING_TOOL: FunctionDeclarationsTool = {
+  functionDeclarations: [{
+    name: 'google_search',
+    description: "Search Google for a list of queries. Use advanced operators like 'site:x.com' to find authentic comments, not news articles.",
+    parameters: { type: Type.OBJECT, properties: { queries: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['queries'] }
+  }]
 };
 
 export default async function handler(req: any, res: any) {
@@ -23,6 +27,40 @@ export default async function handler(req: any, res: any) {
     const { datasetState, apoFeedback, manualQueries, ragContext } = req.body;
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    // --- RAG Context Refinement Step ---
+    let refinedRagContext = ragContext || '';
+    if (manualQueries && ragContext) {
+      const selectionPrompt = `
+You are a highly efficient assistant. Your task is to select the most relevant text snippets from a provided context that will help answer a user's search query.
+
+**Instructions:**
+1. Read the search query to understand the user's intent.
+2. Read through all the provided context snippets.
+3. Select up to the top 3 snippets that are most directly relevant to the query.
+4. Return ONLY these selected snippets, concatenated together. Do not add any commentary, headings, or explanations.
+
+**Search Query:**
+"${manualQueries}"
+
+**Context Snippets:**
+${ragContext}
+
+**Your Response (only the most relevant snippets):**
+`;
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: selectionPrompt,
+        });
+        refinedRagContext = response.text.trim();
+      } catch (e) {
+        console.warn('RAG context refinement failed, using full context as fallback.', e);
+        // Fallback to using the original ragContext if refinement fails
+        refinedRagContext = ragContext; 
+      }
+    }
+    // --- End RAG Context Refinement ---
 
     // 1. Inject the request data into the Python script template
     const finalPythonScript = pythonSwarmScript
@@ -40,7 +78,7 @@ export default async function handler(req: any, res: any) {
       )
       .replace(
         'RAG_CONTEXT = """{RAG_CONTEXT}"""',
-        `RAG_CONTEXT = """${ragContext || ''}"""`
+        `RAG_CONTEXT = """${refinedRagContext.replace(/"/g, '\\"')}"""`
       );
     
     // 2. Create the prompt for the model, asking it to run our Python script

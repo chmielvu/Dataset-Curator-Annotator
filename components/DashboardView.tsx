@@ -66,8 +66,8 @@ const DatasetUploader: React.FC<{ onUpload: (annotations: Annotation[]) => void;
         const file = event.target.files?.[0];
         if (!file) return;
 
-        if (!file.name.endsWith('.jsonl')) {
-            setError('Invalid file type. Please select a .jsonl file.');
+        if (!file.name.endsWith('.json')) {
+            setError('Invalid file type. Please select a .json file.');
             return;
         }
 
@@ -76,33 +76,19 @@ const DatasetUploader: React.FC<{ onUpload: (annotations: Annotation[]) => void;
 
         try {
             const text = await file.text();
-            const lines = text.split('\n').filter(line => line.trim() !== '');
-            const annotations: Annotation[] = [];
-            const errors: string[] = [];
-
-            lines.forEach((line, index) => {
-                try {
-                    // Attempt to fix common JSON errors like trailing commas
-                    const cleanedLine = line.replace(/,\s*([}\]])/g, '$1');
-                    annotations.push(JSON.parse(cleanedLine) as Annotation);
-                } catch (e: any) {
-                    errors.push(`Line ${index + 1}: ${e.message}`);
-                }
-            });
-
-            if (errors.length > 0) {
-                const errorMessage = `Failed to parse ${errors.length} line(s). The valid lines (if any) have been loaded. Please check the following lines in your file:\n- ${errors.slice(0, 5).join('\n- ')}`;
-                setError(errorMessage + (errors.length > 5 ? `\n...and ${errors.length - 5} more.` : ''));
+            const annotations = JSON.parse(text) as Annotation[];
+            if (!Array.isArray(annotations)) {
+              throw new Error("Invalid JSON format. The file must contain an array of annotation objects.");
             }
-
-            if (annotations.length > 0) {
-                onUpload(annotations);
-            } else if (errors.length === 0) {
-                setError("File is empty or contains no valid annotations.");
+            onUpload(annotations);
+        } catch (e: any) {
+            let errorMessage = `Failed to parse ${file.name}.`;
+            if (e instanceof SyntaxError) {
+              errorMessage += " The file does not contain valid JSON. Please ensure it's a correctly formatted JSON array.";
+            } else {
+              errorMessage += ` Error: ${e.message}`;
             }
-
-        } catch (err: any) {
-            setError(err.message);
+            setError(errorMessage);
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) {
@@ -115,7 +101,7 @@ const DatasetUploader: React.FC<{ onUpload: (annotations: Annotation[]) => void;
   return (
     <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
         <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Load Existing Dataset</h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Upload a JSONL file containing previous annotations. This will reset the current dashboard and state to reflect the uploaded data.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Upload a JSON file containing an array of annotations. This will reset the current dashboard and state to reflect the uploaded data.</p>
         
         {error && (
             <div className="p-3 my-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-500/50 text-red-800 dark:text-red-300 text-sm rounded-md whitespace-pre-wrap">
@@ -133,8 +119,8 @@ const DatasetUploader: React.FC<{ onUpload: (annotations: Annotation[]) => void;
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
             </svg>
           )}
-          <span>{isUploading ? 'Processing...' : 'Upload .jsonl File'}</span>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} disabled={isUploading} accept=".jsonl" />
+          <span>{isUploading ? 'Processing...' : 'Upload .json File'}</span>
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} disabled={isUploading} accept=".json" />
         </label>
     </div>
   );
@@ -184,7 +170,7 @@ const AdvancedAnalysis: React.FC = () => {
 
     return (
         <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-            <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Advanced Analysis (via Code Interpreter)</h3>
+            <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Tactic Drift Analysis (via Code Interpreter)</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                 Generate a data-rich visualization from the QC feedback log using a Python sandbox. This provides deeper insights into annotation drift and quality.
             </p>
@@ -235,16 +221,16 @@ const ExportData: React.FC = () => {
                 return;
             }
 
-            const jsonlContent = feedbackLog
-                .map(entry => JSON.stringify(entry.correctedAnnotation))
-                .join('\n');
+            // Export finalized annotations as a JSON array
+            const annotationsToExport = feedbackLog.map(entry => entry.correctedAnnotation);
+            const jsonContent = JSON.stringify(annotationsToExport, null, 2);
             
-            const blob = new Blob([jsonlContent], { type: 'application/jsonl' });
+            const blob = new Blob([jsonContent], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = `magdalenka_annotations_${timestamp}.jsonl`;
+            a.download = `magdalenka_annotations_${timestamp}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -262,7 +248,7 @@ const ExportData: React.FC = () => {
         <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
             <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Export Annotations</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                Download the entire annotated dataset as a .jsonl file. Each line corresponds to one finalized annotation.
+                Download the entire annotated dataset as a .json file.
             </p>
             <button
                 onClick={handleExport}
@@ -272,7 +258,7 @@ const ExportData: React.FC = () => {
                 {isExporting && (
                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 )}
-                {isExporting ? 'Exporting...' : 'Export to .jsonl'}
+                {isExporting ? 'Exporting...' : 'Export to .json'}
             </button>
         </div>
     );

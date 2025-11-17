@@ -1,9 +1,10 @@
 
 import React from 'react';
+import { AppView } from '../types';
 
 interface PipelineStepperProps {
-  currentStep: 'curator' | 'annotator' | 'qc';
-  batchProgress?: string;
+  currentStep: AppView;
+  batchProgress: string;
 }
 
 const Step: React.FC<{
@@ -43,7 +44,7 @@ const PipelineStepper: React.FC<PipelineStepperProps> = ({ currentStep, batchPro
   const steps = [
     { id: 'curator', label: 'Curate' },
     { id: 'annotator', label: 'Annotate' },
-    { id: 'qc', label: 'QC & Finalize' },
+    { id: 'verification', label: 'Verify & Finalize' },
   ];
 
   const currentIndex = steps.findIndex(step => step.id === currentStep);

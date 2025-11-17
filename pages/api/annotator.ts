@@ -103,8 +103,8 @@ export default async function handler(req: any, res: any) {
     // Use a more powerful model for the final, critical step
     const finalJson = await callGemini(ai, criticPrompt, "gemini-2.5-pro", true);
 
-    const confidence = finalJson.cleavages && Array.isArray(finalJson.cleavages) && finalJson.cleavages.length > 0
-        ? Math.max(...finalJson.cleavages)
+    const confidence = finalJson.labels && Array.isArray(finalJson.labels) && finalJson.labels.length > 0
+        ? Math.max(...finalJson.labels)
         : 0;
 
     const finalAnnotation = {

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { DatasetState, SwarmJobResult, SpecialistAgentResult } from '../types';
+import { DatasetState, SwarmJobResult, SpecialistAgentResult, Annotation } from '../types';
 import { useEmbedding } from '../hooks/useEmbedding';
 import { db } from '../lib/dexie';
 
@@ -68,97 +68,56 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.jsonl')) {
-        onError("Invalid file type. Please select a .jsonl file.");
+    if (!file.name.endsWith('.json')) {
+        onError("Invalid file type. Please select a .json file.");
         return;
     }
 
     onError(null);
-    const text = await file.text();
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    const totalLines = lines.length;
+    setIsLoading(true);
+    setStatusMessage(`Processing ${file.name}...`);
 
-    if (totalLines === 0) {
-      onError("File is empty or contains no processable lines.");
-      event.target.value = '';
-      return;
-    }
-    
-    setBatchStatus({
-      fileName: file.name,
-      processed: 0,
-      total: totalLines,
-      found: 0,
-      errors: 0
-    });
-
-    const posts: string[] = [];
-    const errorMessages: string[] = [];
-    let currentIndex = 0;
-    const CHUNK_SIZE = 250; // Process lines in chunks to avoid freezing the UI
-
-    const processNextChunk = () => {
-      const batchEnd = Math.min(currentIndex + CHUNK_SIZE, totalLines);
-      let chunkFound = 0;
-      let chunkErrors = 0;
-
-      for (let i = currentIndex; i < batchEnd; i++) {
-        try {
-          const json = JSON.parse(lines[i]);
-          if (typeof json.text === 'string' && json.text.trim() !== '') {
-            posts.push(json.text.trim());
-            chunkFound++;
-          } else {
-            errorMessages.push(`Line ${i + 1}: Missing or empty 'text' field.`);
-            chunkErrors++;
-          }
-        } catch (e) {
-          errorMessages.push(`Line ${i + 1}: Invalid JSON.`);
-          chunkErrors++;
+    try {
+        const text = await file.text();
+        const annotations = JSON.parse(text) as Partial<Annotation>[];
+        if (!Array.isArray(annotations)) {
+            throw new Error("Invalid JSON format. The file should contain a JSON array of objects.");
         }
-      }
+        
+        const posts = annotations
+            .map(ann => ann.text)
+            .filter((text): text is string => typeof text === 'string' && text.trim() !== '');
 
-      setBatchStatus(prev => prev ? ({
-        ...prev,
-        processed: batchEnd,
-        found: prev.found + chunkFound,
-        errors: prev.errors + chunkErrors,
-      }) : null);
+        if (posts.length === 0) {
+            throw new Error("No valid posts with a 'text' field were found in the file.");
+        }
 
-      currentIndex = batchEnd;
+        const batchResult: SwarmJobResult = {
+            finalPosts: posts,
+            triggerSuggestions: [],
+            agentReports: [{
+                agentName: 'Manual',
+                contributedPosts: posts,
+                executedQueries: 'N/A - Manual Batch Upload',
+                log: `Batch of ${posts.length} posts was uploaded from file: ${file.name}.`
+            }]
+        };
+        onPostsFound(batchResult);
+        setLastSearchReport(batchResult);
 
-      if (currentIndex < totalLines) {
-        setTimeout(processNextChunk, 0); // Yield to main thread
-      } else {
-        // Finished processing
-        setTimeout(() => { // Short delay to let the user see the 100% complete bar
-          if (errorMessages.length > 0) {
-              const errorMessage = `Parsed file with ${errorMessages.length} error(s):\n- ${errorMessages.slice(0, 5).join('\n- ')}`;
-              onError(errorMessage + (errorMessages.length > 5 ? `\n...and ${errorMessages.length - 5} more.` : ''));
-          }
-          if (posts.length > 0) {
-              const batchResult: SwarmJobResult = {
-                  finalPosts: posts,
-                  triggerSuggestions: [],
-                  agentReports: [{
-                      agentName: 'Manual',
-                      contributedPosts: posts,
-                      executedQueries: 'N/A - Manual Batch Upload',
-                      log: `Batch of ${posts.length} posts was uploaded from file: ${file.name}.`
-                  }]
-              };
-              onPostsFound(batchResult);
-              setLastSearchReport(batchResult);
-          } else if (errorMessages.length === 0) {
-               onError("File is valid but contains no posts with a 'text' field.");
-          }
-          setBatchStatus(null);
-        }, 500);
-      }
-    };
-    
-    processNextChunk(); // Start the processing loop
-    event.target.value = ''; // Reset file input immediately
+    } catch (e: any) {
+        let errorMessage = `Failed to process ${file.name}.`;
+        if (e instanceof SyntaxError) {
+            errorMessage += " The file does not contain valid JSON. Please ensure it's a correctly formatted JSON array.";
+        } else {
+            errorMessage += ` Error: ${e.message}`;
+        }
+        onError(errorMessage);
+    } finally {
+        setIsLoading(false);
+        setStatusMessage(null);
+        event.target.value = ''; // Reset file input
+    }
   };
 
   const handleRunAgent = async () => {
@@ -201,19 +160,46 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
         body: JSON.stringify(bodyPayload),
       });
 
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.details || data.error || 'The swarm failed to return a valid result.');
+        const status = response.status;
+        let errorDetails = 'No specific reason provided by the server.';
+        try {
+          errorDetails = (await response.json()).details || 'Server returned an error without details.';
+        } catch (e) {
+            // Error response was not valid JSON
+        }
+
+        if (status === 504) throw new Error("The curator swarm timed out. This can happen with complex requests. Please try again, or simplify the manual query.");
+        if (status === 429) throw new Error("API rate limit exceeded. Please wait a moment before trying again.");
+        if (status === 400) throw new Error(`The request was invalid. The server responded: ${errorDetails}`);
+        if (status >= 500) throw new Error(`A server error occurred. Please try again later. Details: ${errorDetails}`);
+        throw new Error(`Swarm execution failed with an unexpected error (Status: ${status}).`);
       }
       
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error("The agent swarm returned a malformed response. The data is not in the correct JSON format.");
+      }
+
       const swarmResult = data.swarmResult as SwarmJobResult;
       
+      if (!swarmResult) {
+          throw new Error("The agent swarm returned a valid response, but the expected 'swarmResult' data is missing.");
+      }
+
       onPostsFound(swarmResult);
       setLastSearchReport(swarmResult);
       setShowReport(true);
       
     } catch (err: any) {
-      onError(err.message);
+      console.error('CuratorView Swarm Error:', err);
+      let finalMessage = err.message;
+      if (err.message.includes('Failed to fetch')) {
+        finalMessage = 'A network error occurred. Please check your internet connection and try again.';
+      }
+      onError(`Curator Swarm Failed: ${finalMessage}`);
     } finally {
       setIsLoading(false);
       setStatusMessage(null);
@@ -334,26 +320,9 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Upload a batch of posts:</p>
-            {batchStatus ? (
+            {isProcessingFile ? (
                 <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border dark:border-slate-700/50 space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                        <p className="font-medium text-slate-700 dark:text-slate-300 truncate pr-4" title={batchStatus.fileName}>
-                            Processing: {batchStatus.fileName}
-                        </p>
-                        <p className="font-mono text-slate-500 dark:text-slate-400">
-                            {batchStatus.processed}/{batchStatus.total}
-                        </p>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2.5">
-                        <div 
-                            className="bg-rose-600 h-2.5 rounded-full transition-all duration-150" 
-                            style={{ width: `${(batchStatus.processed / batchStatus.total) * 100}%` }}>
-                        </div>
-                    </div>
-                     <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                        <span>Found: <span className="font-semibold text-green-600 dark:text-green-400">{batchStatus.found}</span></span>
-                        <span>Errors: <span className="font-semibold text-red-600 dark:text-red-400">{batchStatus.errors}</span></span>
-                    </div>
+                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 animate-pulse">{statusMessage}</p>
                 </div>
             ) : (
               <>
@@ -361,10 +330,10 @@ const CuratorView: React.FC<CuratorViewProps> = ({ datasetState, onPostsFound, o
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
-                    <span>Upload .jsonl Batch</span>
-                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={!!isLoading || isProcessingFile} accept=".jsonl" />
+                    <span>Upload .json Batch</span>
+                    <input type="file" className="hidden" onChange={handleBatchUpload} disabled={!!isLoading || isProcessingFile} accept=".json" />
                 </label>
-                <p className="text-xs text-slate-500">Each line must be a JSON object with a "text" field, e.g., `{"text": "This is a post."}`</p>
+                <p className="text-xs text-slate-500">File must be a JSON array of objects, each with a "text" field.</p>
               </>
             )}
           </div>

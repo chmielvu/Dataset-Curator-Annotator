@@ -13,19 +13,18 @@ export interface DatasetState {
 }
 
 export interface Annotation {
-  // Based on BERT_finetuning_magdalenka_schema.json
   id: string;
   text: string;
-  cleavages: number[];
-  tactics: string[];
-  emotion_fuel: string;
+  labels: number[]; // Formerly 'cleavages'
+  tactics: string[]; // Now human-readable, e.g., "Loaded Language"
+  emotion_fuel: string; // Now human-readable, e.g., "Anger"
   stance_label: string;
   stance_target: string;
   confidence?: number;
 }
 
 // ---- App Navigation ----
-export type AppView = 'curator' | 'annotator' | 'qc' | 'corpus' | 'dashboard';
+export type AppView = 'curator' | 'annotator' | 'verification' | 'corpus' | 'dashboard';
 
 // ---- RAG Types ----
 
@@ -65,22 +64,18 @@ export interface QCCompletionData {
 
 // ---- Generative UI & QC Agent ----
 interface BaseUiSuggestion {
-  field_path: string; // e.g., "cleavages[1]", "stance_target"
+  field_path: string; // e.g., "labels[1]", "tactics", "stance_target"
   rationale: string;
 }
 
 export interface SliderSuggestion extends BaseUiSuggestion {
   control_type: 'slider';
   suggestion: number;
-  min: number;
-  max: number;
-  step: number;
 }
 
 export interface MultiSelectSuggestion extends BaseUiSuggestion {
   control_type: 'multiselect';
-  suggestion: string[];
-  options: string[];
+  suggestion: string[]; // The full suggested array of human-readable tactic names
 }
 
 export interface TextSuggestion extends BaseUiSuggestion {
@@ -88,13 +83,17 @@ export interface TextSuggestion extends BaseUiSuggestion {
   suggestion: string;
 }
 
-export type UiSuggestion = SliderSuggestion | MultiSelectSuggestion | TextSuggestion;
+export interface SelectSuggestion extends BaseUiSuggestion {
+  control_type: 'select';
+  suggestion: string;
+}
+
+export type UiSuggestion = SliderSuggestion | MultiSelectSuggestion | TextSuggestion | SelectSuggestion;
 
 export interface QcAgentResult {
   qc_passed: boolean;
   feedback: string;
-  revised_annotation: Annotation | null;
-  ui_suggestions?: UiSuggestion[];
+  ui_suggestions: UiSuggestion[];
 }
 
 
