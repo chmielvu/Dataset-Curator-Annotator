@@ -147,23 +147,30 @@ export const useEmbedding = () => {
           }
 
           const resolver = requestQueue.current.get(textKey);
-          if (!resolver) return;
+          if (!resolver) return; // Already handled (e.g., by timeout)
 
           if (status === 'complete') {
             resolver.resolve(embedding);
           } else if (status === 'error') {
             resolver.reject(new Error(error));
           }
-          requestQueue.current.delete(textKey);
         };
 
         worker.onerror = (event) => {
-          console.error('Embedding worker error:', event);
-          if (isMounted) {
-            setInitializationError(`A critical error occurred in the embedding worker. RAG features will be unavailable. Please try reloading. Error: ${event.message}`);
-            setIsReady(false);
-            setIsLoading(false);
-          }
+            const errorMessage = `A critical error occurred in the embedding worker. RAG features will be unavailable. Please try reloading. Error: ${event.message}`;
+            console.error('Embedding worker error:', event);
+            
+            // Reject all pending promises in the queue to unblock any waiting calls
+            requestQueue.current.forEach(resolver => {
+                resolver.reject(new Error(errorMessage));
+            });
+            requestQueue.current.clear();
+    
+            if (isMounted) {
+              setInitializationError(errorMessage);
+              setIsReady(false);
+              setIsLoading(false);
+            }
         };
 
       } catch (e: any) {
@@ -192,12 +199,29 @@ export const useEmbedding = () => {
   const generateEmbedding = useCallback((text: string): Promise<number[]> => {
     const textKey = `${Date.now()}-${Math.random()}`;
     return new Promise((resolve, reject) => {
-      if (!workerRef.current) {
-        reject(new Error('Embedding worker is not initialized.'));
-        return;
-      }
-      requestQueue.current.set(textKey, { resolve, reject });
-      workerRef.current.postMessage({ type: 'generate-embedding', text, textKey });
+        if (!workerRef.current) {
+            return reject(new Error('Embedding worker is not initialized.'));
+        }
+
+        const timeoutId = setTimeout(() => {
+            requestQueue.current.delete(textKey); // Clean up on timeout
+            reject(new Error("Embedding generation timed out after 10 seconds."));
+        }, 10000);
+
+        requestQueue.current.set(textKey, {
+            resolve: (embedding: number[]) => {
+                clearTimeout(timeoutId);
+                requestQueue.current.delete(textKey); // Clean up on success
+                resolve(embedding);
+            },
+            reject: (error: any) => {
+                clearTimeout(timeoutId);
+                requestQueue.current.delete(textKey); // Clean up on error
+                reject(error);
+            }
+        });
+
+        workerRef.current.postMessage({ type: 'generate-embedding', text, textKey });
     });
   }, []);
   

@@ -39,30 +39,40 @@ function App() {
   useEffect(() => {
     const loadState = async () => {
       try {
-        let savedState = await db.dataset.get('currentState');
-        
-        const isFirstRun = !(await db.dataset.get('hasBootstrapped'));
-        if (isFirstRun && !savedState) {
-          console.log("First run detected. Bootstrapping from starter-dataset.json...");
-          const response = await fetch('/starter-dataset.json');
-          const starterAnnotations: Annotation[] = await response.json();
-          const bootstrappedState = processAnnotationsToState(starterAnnotations, INITIAL_DATASET_STATE);
-          await db.dataset.put({ id: 'currentState', data: bootstrappedState });
-          await db.dataset.put({ id: 'hasBootstrapped', data: { value: true } as any });
-          savedState = { id: 'currentState', data: bootstrappedState };
-        }
+        const stateLoader = async () => {
+          let savedState = await db.dataset.get('currentState');
+          
+          const isFirstRun = !(await db.dataset.get('hasBootstrapped'));
+          if (isFirstRun && !savedState) {
+            console.log("First run detected. Bootstrapping from starter-dataset.json...");
+            const response = await fetch('/starter-dataset.json');
+            const starterAnnotations: Annotation[] = await response.json();
+            const bootstrappedState = processAnnotationsToState(starterAnnotations, INITIAL_DATASET_STATE);
+            await db.dataset.put({ id: 'currentState', data: bootstrappedState });
+            await db.dataset.put({ id: 'hasBootstrapped', data: { value: true } as any });
+            savedState = { id: 'currentState', data: bootstrappedState };
+          }
 
-        if (savedState) {
-          const mergedState = { ...INITIAL_DATASET_STATE, ...savedState.data };
-          setDatasetState(mergedState);
-        } else {
-          await db.dataset.put({ id: 'currentState', data: INITIAL_DATASET_STATE });
-        }
-        await updateQueueCounts();
-      } catch (err) {
+          if (savedState) {
+            const mergedState = { ...INITIAL_DATASET_STATE, ...savedState.data };
+            setDatasetState(mergedState);
+          } else {
+            await db.dataset.put({ id: 'currentState', data: INITIAL_DATASET_STATE });
+          }
+          await updateQueueCounts();
+        };
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Initialization timed out after 5 seconds. The local database might be locked or unresponsive.")), 5000)
+        );
+
+        await Promise.race([stateLoader(), timeoutPromise]);
+        
+        setIsStateLoaded(true);
+
+      } catch (err: any) {
         console.error('Failed to load state from Dexie:', err);
-        setError('Failed to load saved state. Your browser may be in private mode or have IndexedDB disabled.');
-      } finally {
+        setError('Failed to load saved state. Your browser may be in private mode or have IndexedDB disabled. Error: ' + err.message);
         setIsStateLoaded(true);
       }
     };
