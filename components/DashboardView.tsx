@@ -264,6 +264,50 @@ const ExportData: React.FC = () => {
     );
 };
 
+const ResetAppState: React.FC = () => {
+    const [isResetting, setIsResetting] = useState(false);
+    
+    const handleReset = async () => {
+      if (window.confirm("Are you sure you want to reset all application data? This will clear all queues, the document archive, and the dataset state. This action cannot be undone.")) {
+        setIsResetting(true);
+        try {
+          await Promise.all([
+            db.chunks.clear(),
+            db.dataset.clear(),
+            db.feedbackLog.clear(),
+            db.drafts.clear(),
+            db.curationQueue.clear(),
+            db.verificationQueue.clear(),
+          ]);
+          window.location.reload();
+        } catch (error) {
+          console.error("Failed to reset application state:", error);
+          alert("An error occurred while resetting the application. Check the console for details.");
+          setIsResetting(false);
+        }
+      }
+    };
+  
+    return (
+      <div className="mt-8 p-6 bg-rose-50 dark:bg-rose-900/30 rounded-lg shadow-sm border border-rose-200 dark:border-rose-500/50">
+          <h3 className="text-xl font-semibold mb-2 text-rose-900 dark:text-rose-200">System Utilities</h3>
+          <p className="text-sm text-rose-700 dark:text-rose-300 mb-4">
+              Advanced actions for managing the application state. Use with caution.
+          </p>
+          <button
+              onClick={handleReset}
+              disabled={isResetting}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-rose-600 hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed"
+          >
+              {isResetting && (
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              )}
+              {isResetting ? 'Resetting...' : 'Reset Application State'}
+          </button>
+      </div>
+    );
+  };
+
 
 interface DashboardViewProps {
   datasetState: DatasetState;
@@ -320,10 +364,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ datasetState, onDatasetUp
       </div>
 
       <AdvancedAnalysis />
-
       <DatasetUploader onUpload={onDatasetUpload} />
-
       <ExportData />
+      <ResetAppState />
     </section>
   );
 };

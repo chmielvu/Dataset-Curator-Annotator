@@ -1,233 +1,221 @@
-
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Annotation } from '../types';
 import { db } from '../lib/dexie';
 
 interface AnnotatorViewProps {
-  postText: string;
-  onAnnotationComplete: (annotation: Annotation) => void;
+  curationQueueCount: number;
+  onQueuesUpdate: () => void;
   onError: (error: string | null) => void;
-  onBack: () => void;
 }
 
-const AnnotatorView: React.FC<AnnotatorViewProps> = ({ postText, onAnnotationComplete, onError, onBack }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [completedAnnotation, setCompletedAnnotation] = useState<Annotation | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [jsonError, setJsonError] = useState<string | null>(null);
+// Helper for a robust API call with timeout and specific error handling
+async function callAnnotatorApi(postToAnnotate: string): Promise<Annotation> {
+    const controller = new AbortController();
+    // 60-second timeout for each annotation request
+    const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
-  useEffect(() => {
-    const loadDraft = async () => {
-      // Don't load draft if an annotation is already in progress from a re-run
-      if (postText && !completedAnnotation) {
-        try {
-          const draft = await db.drafts.get(postText);
-          if (draft) {
-            setCompletedAnnotation(draft.annotation);
-          }
-        } catch (err) {
-          console.error("Failed to load draft:", err);
-          // Don't bother the user with an error here, just proceed without a draft.
-        }
-      }
-    };
-    loadDraft();
-  }, [postText, completedAnnotation]);
-  
-  const handleAnnotate = async () => {
-    setIsLoading(true);
-    onError(null);
-    setCompletedAnnotation(null);
-    setSaveStatus('idle');
-    setJsonError(null);
-    
-    let recentFeedback = [];
     try {
-        recentFeedback = await db.getRecentFeedback(5);
-    } catch (err) {
-        console.warn("Could not fetch APO feedback:", err);
-    }
-    
-    try {
-      const response = await fetch('/api/annotator', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ post: postText, apoFeedback: recentFeedback }),
-      });
+        const recentFeedback = await db.getRecentFeedback(5);
+        const response = await fetch('/api/annotator', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: postToAnnotate, apoFeedback: recentFeedback }),
+            signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const status = response.status;
-        let errorDetails = 'An unknown error occurred.';
-        try {
-            errorDetails = (await response.json()).details || 'Server returned an error without details.';
-        } catch (e) {
-            // Error response wasn't valid JSON
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let errorMsg = `Agent failed with status ${response.status}.`;
+            if (response.status === 429) {
+                errorMsg = "Rate limit reached";
+            } else if (response.status === 504) {
+                errorMsg = "Server timeout";
+            } else {
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.details || errorMsg;
+                } catch (e) { /* ignore if no json body */ }
+            }
+            throw new Error(errorMsg);
         }
         
-        if (status === 400) throw new Error(`Invalid input for the agent. Server says: ${errorDetails}`);
-        if (status === 429) throw new Error('API rate limit exceeded. Please wait a moment and try again.');
-        if (status >= 500) throw new Error(`The annotation service encountered a critical error. Details: ${errorDetails}`);
-        throw new Error(`An unexpected API error occurred (Status: ${response.status}). Details: ${errorDetails}`);
-      }
-
-      const data = await response.json();
-      setCompletedAnnotation(data.annotation as Annotation);
+        const data = await response.json();
+        if (!data.annotation) {
+            throw new Error("Malformed response from agent.");
+        }
+        return data.annotation;
 
     } catch (err: any) {
-      console.error(err);
-      let finalMessage = err.message;
-      if (err.message.includes('Failed to fetch')) {
-        finalMessage = 'A network error occurred. Please check your connection and try again.';
-      }
-      onError(`Annotation Agent Error: ${finalMessage}`);
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error("Client timeout (60s).");
+        }
+        throw err;
+    }
+}
+
+
+const AnnotatorView: React.FC<AnnotatorViewProps> = ({ curationQueueCount, onQueuesUpdate, onError }) => {
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ processed: 0, total: 0, errors: 0 });
+  const [manualPostText, setManualPostText] = useState('');
+  const [activityLog, setActivityLog] = useState<string[]>([]);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  
+  const cancelBatchRef = useRef(false);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+        logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [activityLog]);
+
+  const handleManualAnnotation = async () => {
+    if (!manualPostText.trim()) return;
+    setIsBatchRunning(true);
+    onError(null);
+    try {
+        const annotation = await callAnnotatorApi(manualPostText.trim());
+        await db.addForVerification(manualPostText.trim(), annotation);
+        onQueuesUpdate();
+        setManualPostText('');
+    } catch (err: any) {
+        onError(`Manual annotation failed: ${err.message}`);
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    if (!completedAnnotation) return;
-    setSaveStatus('saving');
-    try {
-      await db.drafts.put({
-        postText: postText,
-        annotation: completedAnnotation,
-      });
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err) {
-      console.error("Failed to save draft:", err);
-      onError("Failed to save draft. This may be due to browser permissions or private mode.");
-      setSaveStatus('idle');
+        setIsBatchRunning(false);
     }
   };
   
-  const handleProceed = () => {
-    if (completedAnnotation) {
-      onAnnotationComplete(completedAnnotation);
-    }
-  };
+  const handleRunBatchAnnotation = async () => {
+    cancelBatchRef.current = false;
+    setIsBatchRunning(true);
+    onError(null);
+    const totalToProcess = curationQueueCount;
+    setBatchProgress({ processed: 0, total: totalToProcess, errors: 0 });
+    setActivityLog([`[${new Date().toLocaleTimeString()}] Starting batch for ${totalToProcess} posts.`]);
 
-  const handleJsonEdit = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    try {
-      const newAnnotation = JSON.parse(newText);
-      setCompletedAnnotation(newAnnotation);
-      setJsonError(null); // Clear error if parse is successful
-    } catch (err) {
-      // If parsing fails, don't update the state
-      // This prevents the app from crashing with malformed JSON
-      setJsonError("Invalid JSON format. Please correct it to proceed.");
+    for (let i = 0; i < totalToProcess; i++) {
+      if (cancelBatchRef.current) {
+        setActivityLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Batch cancelled by user.`]);
+        break;
+      }
+      
+      const postToAnnotate = await db.dequeuePost();
+      if (!postToAnnotate) {
+        setActivityLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Queue is empty. Stopping batch.`]);
+        break;
+      }
+
+      const logId = activityLog.length + i;
+      setActivityLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] [${i+1}/${totalToProcess}] Annotating: "${postToAnnotate.substring(0, 40)}..."`]);
+
+      try {
+        const annotation = await callAnnotatorApi(postToAnnotate);
+        await db.addForVerification(postToAnnotate, annotation);
+        setBatchProgress(p => ({ ...p, processed: p.processed + 1 }));
+        setActivityLog(prev => prev.map((log, index) => index === logId ? `${log} -> ✔️ Success` : log));
+
+      } catch (err: any) {
+        console.error("Error during batch annotation:", err);
+        // Put the failed post back in the queue for another try later
+        await db.addPostsToQueue([postToAnnotate]);
+        setBatchProgress(p => ({ ...p, errors: p.errors + 1 }));
+        const errorMessage = err.message || "Unknown error";
+        setActivityLog(prev => prev.map((log, index) => index === logId ? `${log} -> ❌ FAILED (${errorMessage}) - Re-queued` : log));
+
+        // Special handling for rate limits - pause the whole batch
+        if (errorMessage.includes("Rate limit")) {
+            setActivityLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Rate limit hit. Pausing batch for 5 seconds...`]);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      } finally {
+        // Update counts after every item
+        onQueuesUpdate();
+      }
     }
+    
+    setActivityLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] Batch finished.`]);
+    setIsBatchRunning(false);
   };
   
-  const confidenceScore = completedAnnotation 
-    ? (completedAnnotation.confidence ?? Math.max(...(completedAnnotation.cleavages || [0]))) 
-    : 0;
-
-  if (completedAnnotation) {
-    return (
-      <section className="p-4 sm:p-6 border border-rose-200 dark:border-rose-500/30 rounded-lg bg-rose-50 dark:bg-rose-900/20 relative">
-        <button onClick={onBack} className="absolute top-4 right-4 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">&larr; Cancel Batch</button>
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">2. Annotation Complete</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">The agent has generated an annotation. Review, edit, and save the draft before proceeding to Verification.</p>
-
-        <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600/50 rounded-lg shadow-sm">
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Post:</h3>
-          <blockquote className="mt-2 p-3 bg-slate-50 dark:bg-slate-900/30 border-l-4 border-rose-500 text-slate-700 dark:text-slate-300 italic">
-            <p>"{postText}"</p>
-          </blockquote>
-        </div>
-
-        <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border rounded-lg dark:border-slate-600/50 space-y-3">
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Annotation Summary:</h3>
-          <div className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-900/30 rounded-md">
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Confidence Score:</span>
-            <span className="font-mono text-lg font-bold text-rose-600 dark:text-rose-400">{(confidenceScore * 100).toFixed(1)}%</span>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Confidence is based on the maximum cleavage activation score.</p>
-          <div>
-            <details className="group" open>
-              <summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-black dark:hover:text-white list-none flex items-center">
-                 <span className="group-open:rotate-90 transition-transform duration-200 mr-1">&#9656;</span>
-                 Edit Raw Annotation (HITL)
-              </summary>
-              <textarea
-                className={`mt-2 text-xs font-mono bg-white dark:bg-slate-800 p-3 rounded-md overflow-x-auto border w-full h-64 resize-y ${
-                  jsonError
-                    ? 'border-red-500 focus:ring-red-500'
-                    : 'border-slate-300 dark:border-slate-700 focus:ring-rose-500'
-                } focus:ring-2`}
-                value={JSON.stringify(completedAnnotation, null, 2)}
-                onChange={handleJsonEdit}
-                aria-invalid={!!jsonError}
-              />
-              {jsonError && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{jsonError}</p>
-              )}
-            </details>
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-col sm:flex-row-reverse gap-2">
-           <button 
-            onClick={handleProceed}
-            disabled={!!jsonError}
-            className="w-full sm:w-auto px-4 py-2 font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-colors disabled:bg-rose-300 dark:disabled:bg-rose-800 disabled:cursor-not-allowed"
-          >
-            Proceed to Verification &rarr;
-          </button>
-          <button 
-            onClick={handleSaveDraft} 
-            disabled={saveStatus !== 'idle' || !!jsonError}
-            className="w-full sm:w-auto px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saveStatus === 'saving' && 'Saving...'}
-            {saveStatus === 'saved' && 'Draft Saved!'}
-            {saveStatus === 'idle' && 'Save Draft'}
-          </button>
-          <button 
-            onClick={() => { setCompletedAnnotation(null); setSaveStatus('idle'); setJsonError(null); }} 
-            className="w-full sm:w-auto px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
-          >
-            Re-run Annotation
-          </button>
-        </div>
-      </section>
-    );
-  }
+  const handleCancelBatch = () => {
+    cancelBatchRef.current = true;
+  };
+  
+  const hasWorkToDo = curationQueueCount > 0;
 
   return (
     <section className="p-4 sm:p-6 border border-rose-200 dark:border-rose-500/30 rounded-lg bg-rose-50 dark:bg-rose-900/20 relative">
-      <button onClick={onBack} className="absolute top-4 right-4 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">&larr; Cancel Batch</button>
       <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">2. Annotator Agent</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">The post is ready for analysis. This agent uses an advanced reasoning model to generate a detailed annotation based on the Magdalenka Codex.</p>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Run a batch job to automatically annotate all posts in the queue, or enter a single post manually.</p>
       
-      <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600/50 rounded-lg shadow-sm">
-        <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Post to Annotate:</h3>
-        <blockquote className="mt-2 p-3 bg-slate-50 dark:bg-slate-900/30 border-l-4 border-rose-500 text-slate-700 dark:text-slate-300 italic">
-          <p>"{postText}"</p>
-        </blockquote>
+       <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600/50 rounded-lg shadow-sm">
+        <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Batch Annotation</h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {hasWorkToDo ? `${curationQueueCount} posts are ready for annotation.` : `The annotation queue is empty.`}
+        </p>
+
+        {isBatchRunning && (
+             <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border dark:border-slate-700/50 space-y-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {cancelBatchRef.current ? 'Cancelling batch...' : 'Annotating...'}
+                </p>
+                 <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full">
+                    <div 
+                      className="bg-rose-600 h-2.5 rounded-full transition-all duration-200" 
+                      style={{ width: batchProgress.total > 0 ? `${(batchProgress.processed / batchProgress.total) * 100}%` : '0%' }}>
+                    </div>
+                </div>
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Processed: {batchProgress.processed} / {batchProgress.total}</span>
+                    <span>Errors: {batchProgress.errors}</span>
+                </div>
+                <div ref={logContainerRef} className="mt-2 p-2 bg-slate-200 dark:bg-slate-800 rounded-md h-32 overflow-y-auto font-mono text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                    {activityLog.map((log, index) => <p key={index} className="whitespace-pre-wrap leading-relaxed">{log}</p>)}
+                </div>
+            </div>
+        )}
+
+        <div className="mt-4">
+            {isBatchRunning ? (
+                <button 
+                    onClick={handleCancelBatch}
+                    className="w-full px-4 py-3 font-semibold text-white bg-slate-600 rounded-md hover:bg-slate-700"
+                >
+                    Stop Batch Job
+                </button>
+            ) : (
+                <button 
+                    onClick={handleRunBatchAnnotation} 
+                    disabled={!hasWorkToDo}
+                    className="w-full px-4 py-3 font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20"
+                >
+                    Start Batch Annotation ({curationQueueCount})
+                </button>
+            )}
+        </div>
       </div>
 
-      <button 
-        onClick={handleAnnotate} 
-        disabled={isLoading}
-        className="w-full px-4 py-3 font-semibold text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed transition-all duration-200 ease-in-out flex items-center justify-center shadow-lg shadow-rose-500/10 hover:shadow-xl hover:shadow-rose-500/20"
-      >
-        {isLoading ? (
-          <>
-            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Annotating...
-          </>
-        ) : 'Run Annotation (Heavy Reasoning)'}
-      </button>
+       <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600/50 rounded-lg shadow-sm">
+         <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Manual Annotation</h3>
+         <textarea
+            value={manualPostText}
+            onChange={(e) => setManualPostText(e.target.value)}
+            placeholder="Paste text here to annotate a single post and send it to verification."
+            className="mt-2 w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-rose-500 focus:border-rose-500 transition bg-white dark:bg-slate-800"
+            rows={4}
+            disabled={isBatchRunning}
+          />
+          <button 
+            onClick={handleManualAnnotation} 
+            disabled={isBatchRunning || !manualPostText.trim()}
+            className="mt-2 w-full sm:w-auto px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed transition-colors"
+          >
+            Annotate &amp; Send to Verifier
+          </button>
+       </div>
     </section>
   );
 };

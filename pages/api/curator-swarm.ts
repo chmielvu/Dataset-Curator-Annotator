@@ -1,4 +1,3 @@
-
 // This is a server-side file.
 import { GoogleGenAI, FunctionDeclarationsTool, Type } from "@google/genai";
 import { pythonSwarmScript } from '../../utils/prompts';
@@ -24,7 +23,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { datasetState, apoFeedback, manualQueries, ragContext } = req.body;
+    const { datasetState, apoFeedback, manualQueries, ragContext, precomputedTasks } = req.body;
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -79,6 +78,10 @@ ${ragContext}
       .replace(
         'RAG_CONTEXT = """{RAG_CONTEXT}"""',
         `RAG_CONTEXT = """${refinedRagContext.replace(/"/g, '\\"')}"""`
+      )
+      .replace(
+        'PRECOMPUTED_TASKS = json.loads("""{PRECOMPUTED_TASKS}""")',
+        `PRECOMPUTED_TASKS = json.loads("""${JSON.stringify(precomputedTasks || [])}""")`
       );
     
     // 2. Create the prompt for the model, asking it to run our Python script

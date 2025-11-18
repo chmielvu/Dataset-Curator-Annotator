@@ -1,4 +1,3 @@
-
 export const specialistCuratorPrompt = `
 ... (This prompt is no longer used by the new architecture, but left for reference) ...
 `;
@@ -93,6 +92,7 @@ DATASET_STATE = json.loads("""{DATASET_STATE}""")
 APO_FEEDBACK = json.loads("""{APO_FEEDBACK}""")
 MANUAL_QUERIES = """{MANUAL_QUERIES}"""
 RAG_CONTEXT = """{RAG_CONTEXT}"""
+PRECOMPUTED_TASKS = json.loads("""{PRECOMPUTED_TASKS}""")
 
 # --- 2. Orchestrator: Dynamic Planning Phase ---
 
@@ -106,13 +106,23 @@ def get_underrepresented_item(data_dict, default_item):
     except Exception:
         return default_item
 
-def plan_tasks(dataset_state, apo_feedback, manual_queries):
+def plan_tasks(dataset_state, apo_feedback, manual_queries, precomputed_tasks):
     """
-    Creates the task list for the specialist agents based on DYNAMIC gap analysis.
+    Creates the task list for the specialist agents.
+    PRIORITY: Uses precomputed_tasks if available. Otherwise, performs dynamic gap analysis.
     """
+    if precomputed_tasks:
+        print("[Python Swarm] Using precomputed tasks from frontend.", file=sys.stderr)
+        task_list = precomputed_tasks
+        # Simple APO feedback integration for precomputed tasks
+        if apo_feedback and task_list and task_list[0].get("task"):
+            apo_summary = f"APO Insight: Recent human corrections show agents struggle with: {apo_feedback[0].get('qcFeedback', 'N/A')}"
+            task_list[0]["task"] += f" | {apo_summary}"
+        return task_list
+    
     print("[Python Swarm] Planning tasks...", file=sys.stderr)
     
-    # --- DYNAMIC GAP ANALYSIS ---
+    # --- DYNAMIC GAP ANALYSIS (FALLBACK) ---
     cleavages = dataset_state.get('cleavages', {})
     tactics = dataset_state.get('tactics', {})
     emotions = dataset_state.get('emotions', {})
@@ -178,7 +188,8 @@ def plan_tasks(dataset_state, apo_feedback, manual_queries):
     # Simple APO feedback integration
     if apo_feedback:
         apo_summary = f"APO Insight: Recent human corrections show agents struggle with: {apo_feedback[0].get('qcFeedback', 'N/A')}"
-        task_list[0]["task"] += f" | {apo_summary}"
+        if task_list[0].get("task"):
+             task_list[0]["task"] += f" | {apo_summary}"
         
     print(f"[Python Swarm] Planning complete. {len(task_list)} tasks created.", file=sys.stderr)
     return task_list
@@ -299,7 +310,7 @@ def synthesize_results(agent_reports):
 # --- 5. Main Execution ---
 def main():
     try:
-        tasks = plan_tasks(DATASET_STATE, APO_FEEDBACK, MANUAL_QUERIES)
+        tasks = plan_tasks(DATASET_STATE, APO_FEEDBACK, MANUAL_QUERIES, PRECOMPUTED_TASKS)
         agent_reports = [run_specialist_agent(t["name"], t["persona"], t["task"], RAG_CONTEXT) for t in tasks]
         final_result = synthesize_results(agent_reports)
         print(json.dumps(final_result))

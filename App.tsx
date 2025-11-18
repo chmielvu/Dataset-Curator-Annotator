@@ -1,37 +1,46 @@
 
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import CuratorView from './components/CuratorView';
 import AnnotatorView from './components/AnnotatorView';
 import VerificationView from './components/VerificationView';
 import CorpusView from './components/CorpusView';
-import { DatasetState, Annotation, AppView, QCCompletionData, SwarmJobResult } from './types';
+import { DatasetState, Annotation, AppView } from './types';
 import { INITIAL_DATASET_STATE } from './utils/initialState';
 import { CLEAVAGE_IDS } from './utils/constants';
 import { db } from './lib/dexie';
 import ThemeToggle from './components/ThemeToggle';
 import DashboardView from './components/DashboardView';
 import PolishEagleIcon from './components/PolishEagleIcon';
-import PipelineStepper from './components/PipelineStepper';
+import PipelineHeader from './components/PipelineStepper';
 import { getTacticId, getEmotionId } from './utils/codex';
 
 
 function App() {
   const [datasetState, setDatasetState] = useState<DatasetState>(INITIAL_DATASET_STATE);
   const [currentView, setCurrentView] = useState<AppView>('curator');
-  const [currentPost, setCurrentPost] = useState<string | null>(null);
-  const [currentAnnotation, setCurrentAnnotation] = useState<Annotation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStateLoaded, setIsStateLoaded] = useState(false);
-  const [annotationQueue, setAnnotationQueue] = useState<string[]>([]);
-  const [queueIndex, setQueueIndex] = useState(0);
+  const [curationQueueCount, setCurationQueueCount] = useState(0);
+  const [verificationQueueCount, setVerificationQueueCount] = useState(0);
+
+
+  const updateQueueCounts = useCallback(async () => {
+    try {
+      const curationCount = await db.getQueueCount();
+      const verificationCount = await db.getVerificationQueueCount();
+      setCurationQueueCount(curationCount);
+      setVerificationQueueCount(verificationCount);
+    } catch (e) {
+      console.error("Could not update queue counts", e);
+    }
+  }, []);
 
   useEffect(() => {
     const loadState = async () => {
       try {
         let savedState = await db.dataset.get('currentState');
         
-        // --- NEW: First-time bootstrapping from starter-dataset.json ---
         const isFirstRun = !(await db.dataset.get('hasBootstrapped'));
         if (isFirstRun && !savedState) {
           console.log("First run detected. Bootstrapping from starter-dataset.json...");
@@ -42,7 +51,6 @@ function App() {
           await db.dataset.put({ id: 'hasBootstrapped', data: { value: true } as any });
           savedState = { id: 'currentState', data: bootstrappedState };
         }
-        // --- End bootstrapping ---
 
         if (savedState) {
           const mergedState = { ...INITIAL_DATASET_STATE, ...savedState.data };
@@ -50,6 +58,7 @@ function App() {
         } else {
           await db.dataset.put({ id: 'currentState', data: INITIAL_DATASET_STATE });
         }
+        await updateQueueCounts();
       } catch (err) {
         console.error('Failed to load state from Dexie:', err);
         setError('Failed to load saved state. Your browser may be in private mode or have IndexedDB disabled.');
@@ -58,7 +67,7 @@ function App() {
       }
     };
     loadState();
-  }, []);
+  }, [updateQueueCounts]);
 
   useEffect(() => {
     if (!isStateLoaded) return;
@@ -72,7 +81,6 @@ function App() {
     saveState();
   }, [datasetState, isStateLoaded]);
   
-  // New helper function to process annotations and update state
   const processAnnotationsToState = (annotations: Annotation[], baseState: DatasetState): DatasetState => {
       const newState = JSON.parse(JSON.stringify(baseState));
       
@@ -111,132 +119,29 @@ function App() {
       return newState;
   };
 
-
-  const handleVerificationComplete = async (qcData: QCCompletionData) => {
-    setError(null);
-
-    let qcFeedback = qcData.qcAgentFeedback || 'Manual user correction without QC agent run.';
-    
-    try {
-      const original = qcData.originalAnnotation;
-      const final = qcData.finalAnnotation;
-      
-      if (qcData.wasEdited) {
-        const changes: string[] = [];
-        if (JSON.stringify(original.labels) !== JSON.stringify(final.labels)) {
-          changes.push('labels scores');
-        }
-        if (JSON.stringify([...original.tactics].sort()) !== JSON.stringify([...final.tactics].sort())) {
-          changes.push('tactics');
-        }
-        if (original.emotion_fuel !== final.emotion_fuel) {
-          changes.push('emotion fuel');
-        }
-        if (original.stance_label !== final.stance_label) {
-          changes.push('stance');
-        }
-        if (original.stance_target !== final.stance_target) {
-          changes.push('stance target');
-        }
-        if(original.text !== final.text){
-          changes.push('post text');
-        }
-  
-        const feedbackSummary = changes.length > 0
-          ? `Manual user correction. Fields changed: ${changes.join(', ')}.`
-          : 'Manual edit made without changing core annotation fields.';
-          
-        qcFeedback = feedbackSummary;
-      }
-
-      await db.addFeedback({
-        timestamp: new Date().toISOString(),
-        postText: currentPost!,
-        originalAnnotation: qcData.originalAnnotation,
-        correctedAnnotation: qcData.finalAnnotation,
-        qcFeedback: qcFeedback, 
-      });
-
-    } catch (err) {
-      console.error("Failed to save APO feedback:", err);
-    }
-    
-    setDatasetState(prevState => processAnnotationsToState([qcData.finalAnnotation], prevState));
-
-    // Batch Processing: Check for next item in queue
-    if (queueIndex < annotationQueue.length - 1) {
-      const nextIndex = queueIndex + 1;
-      setQueueIndex(nextIndex);
-      setCurrentPost(annotationQueue[nextIndex]);
-      setCurrentAnnotation(null);
-      setCurrentView('annotator');
-    } else {
-      // End of batch
-      setCurrentPost(null);
-      setCurrentAnnotation(null);
-      setAnnotationQueue([]);
-      setQueueIndex(0);
-      setCurrentView('curator');
-    }
+  const handleAnnotationVerified = (finalAnnotation: Annotation) => {
+    setDatasetState(prevState => processAnnotationsToState([finalAnnotation], prevState));
   };
   
   const handleDatasetUpload = (annotations: Annotation[]) => {
     setError(null);
     try {
         const newState = processAnnotationsToState(annotations, INITIAL_DATASET_STATE);
-        // This is a full reset, so we replace the state entirely
         newState.total_annotations_processed = annotations.length;
         setDatasetState(newState);
     } catch (e: any) {
         setError(`Failed to process uploaded dataset: ${e.message}`);
     }
   };
-
-  const handlePostsFound = (result: SwarmJobResult) => {
-    if (!result.finalPosts || result.finalPosts.length === 0) {
-      handleError("The curator swarm returned an empty batch. Please try again.");
-      return;
-    }
-    setError(null);
-    setAnnotationQueue(result.finalPosts);
-    setQueueIndex(0);
-    setCurrentPost(result.finalPosts[0]);
-    setCurrentAnnotation(null);
-    setCurrentView('annotator');
-  };
   
-  const handleAnnotationComplete = (annotation: Annotation) => {
-    setError(null);
-    setCurrentAnnotation(annotation);
-    setCurrentView('verification');
-  };
-
   const handleError = (errorMessage: string | null) => {
     setError(errorMessage);
   };
-  
-  const handleCancelBatch = () => {
-    setCurrentPost(null);
-    setCurrentAnnotation(null);
-    setAnnotationQueue([]);
-    setQueueIndex(0);
-    setCurrentView('curator');
-  };
 
-
-  type NavButtonProps = React.PropsWithChildren<{
-    view: AppView;
-    icon: React.ReactNode;
-  }>;
-  const NavButton = ({ view, icon, children }: NavButtonProps) => (
+  const NavButton = ({ view, icon, children, count }: React.PropsWithChildren<{ view: AppView, icon: React.ReactNode, count?: number }>) => (
     <button
-      onClick={() => {
-        if (view === 'curator') {
-          handleCancelBatch();
-        }
-        setCurrentView(view);
-      }}
-      className={`flex items-center justify-center space-x-2 w-full px-3 py-2 text-sm font-semibold rounded-md transition-all duration-200 ${
+      onClick={() => setCurrentView(view)}
+      className={`relative flex items-center justify-center space-x-2 w-full px-3 py-2 text-sm font-semibold rounded-md transition-all duration-200 ${
         currentView === view
           ? 'bg-rose-700 text-white shadow-md'
           : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -244,6 +149,11 @@ function App() {
     >
       {icon}
       <span>{children}</span>
+      {typeof count !== 'undefined' && count > 0 && (
+        <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-rose-100 bg-rose-600 rounded-full">
+            {count}
+        </span>
+      )}
     </button>
   );
 
@@ -257,7 +167,6 @@ function App() {
   }
 
   const isPipelineView = currentView === 'curator' || currentView === 'annotator' || currentView === 'verification';
-  const batchProgress = annotationQueue.length > 0 ? `(Post ${queueIndex + 1} of ${annotationQueue.length})` : '';
 
   return (
     <div className="max-w-5xl mx-auto my-4 sm:my-8 p-4 md:p-6 font-sans bg-white dark:bg-slate-800/50 shadow-2xl shadow-slate-900/10 rounded-2xl border border-slate-200 dark:border-slate-700 relative">
@@ -273,9 +182,15 @@ function App() {
           </div>
         </div>
         
-        <nav className="mt-6 grid grid-cols-3 gap-2 bg-slate-100 dark:bg-slate-900/50 p-2 rounded-lg max-w-lg mx-auto border dark:border-slate-700">
-          <NavButton view="curator" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}>
-            Pipeline
+        <nav className="mt-6 grid grid-cols-3 sm:grid-cols-5 gap-2 bg-slate-100 dark:bg-slate-900/50 p-2 rounded-lg max-w-2xl mx-auto border dark:border-slate-700">
+          <NavButton view="curator" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}>
+            Curator
+          </NavButton>
+          <NavButton view="annotator" count={curationQueueCount} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>}>
+            Annotator
+          </NavButton>
+           <NavButton view="verification" count={verificationQueueCount} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}>
+            Verifier
           </NavButton>
           <NavButton view="dashboard" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}>
             Dashboard
@@ -297,32 +212,26 @@ function App() {
       )}
 
       <main className="space-y-8">
-        {isPipelineView && <PipelineStepper currentStep={currentView} batchProgress={batchProgress} />}
+        {isPipelineView && <PipelineHeader curationQueueCount={curationQueueCount} verificationQueueCount={verificationQueueCount} />}
 
         {currentView === 'curator' && (
           <CuratorView
             datasetState={datasetState}
-            onPostsFound={handlePostsFound}
+            onQueueUpdate={updateQueueCounts}
             onError={handleError}
           />
         )}
-        {currentView === 'annotator' && currentPost && (
+        {currentView === 'annotator' && (
           <AnnotatorView
-            postText={currentPost}
-            onAnnotationComplete={handleAnnotationComplete}
-            onBack={handleCancelBatch}
+            curationQueueCount={curationQueueCount}
+            onQueuesUpdate={updateQueueCounts}
             onError={handleError}
           />
         )}
-        {currentView === 'verification' && currentPost && currentAnnotation && (
+        {currentView === 'verification' && (
           <VerificationView
-            postText={currentPost}
-            annotation={currentAnnotation}
-            onVerificationComplete={handleVerificationComplete}
-            onBack={() => {
-              setCurrentAnnotation(null);
-              setCurrentView('annotator');
-            }}
+            onAnnotationVerified={handleAnnotationVerified}
+            onQueueUpdate={updateQueueCounts}
             onError={handleError}
           />
         )}

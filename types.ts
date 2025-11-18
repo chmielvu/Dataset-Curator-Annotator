@@ -62,6 +62,13 @@ export interface QCCompletionData {
   qcAgentFeedback: string | null;
 }
 
+export interface VerificationQueueItem {
+    id?: number;
+    postText: string;
+    annotation: Annotation;
+}
+
+
 // ---- Generative UI & QC Agent ----
 interface BaseUiSuggestion {
   field_path: string; // e.g., "labels[1]", "tactics", "stance_target"
@@ -121,4 +128,12 @@ export interface SwarmJobResult {
   finalPosts: string[];
   triggerSuggestions: string[];
   agentReports: SpecialistAgentResult[];
+}
+
+export interface CurationJob {
+  isActive: boolean;
+  isCancelled: boolean;
+  batchesRequested: number;
+  batchesCompleted: number;
+  postsFound: number;
 }

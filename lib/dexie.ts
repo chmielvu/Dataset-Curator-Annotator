@@ -1,6 +1,6 @@
 
 import Dexie, { Table } from 'dexie';
-import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry, Draft } from '../types';
+import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry, Draft, VerificationQueueItem, Annotation } from '../types';
 
 // Helper function for client-side vector search
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -21,43 +21,30 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 
 
 class VectorDB extends Dexie {
-  // FIX: Removed definite assignment assertion (!) as properties are now initialized in the constructor.
   chunks: Table<DocChunk, string>;
   dataset: Table<{ id: string; data: DatasetState }, string>;
-  feedbackLog: Table<FeedbackLogEntry, number>; // The 'number' is the type of the primary key 'id'.
+  feedbackLog: Table<FeedbackLogEntry, number>;
   drafts: Table<Draft, string>;
+  curationQueue: Table<{ id?: number; postText: string }, number>;
+  verificationQueue: Table<VerificationQueueItem, number>;
 
   constructor() {
     super('MagdalenkaVectorDB');
-    // FIX: The TypeScript compiler is failing to recognize inherited methods from Dexie.
-    // Casting 'this' to 'any' allows us to call 'version' and 'table' to set up the database schema
-    // and correctly initialize the table properties.
-    (this as any).version(1).stores({
-      chunks: 'id, source',
-    });
-    (this as any).version(2).stores({
-      chunks: 'id, source',
-      dataset: '&id',
-    });
-    // Version 3 adds the feedbackLog table
-    (this as any).version(3).stores({
-      chunks: 'id, source',
-      dataset: '&id',
-      feedbackLog: '++id, timestamp', // ++id is auto-incrementing primary key, timestamp is an index.
-    });
-    // Version 4 adds the drafts table
-    (this as any).version(4).stores({
+    (this as any).version(6).stores({
       chunks: 'id, source',
       dataset: '&id',
       feedbackLog: '++id, timestamp',
-      drafts: '&postText' // primary key on postText
+      drafts: '&postText',
+      curationQueue: '++id, &postText',
+      verificationQueue: '++id'
     });
     
-    // Explicitly initialize table properties to satisfy TypeScript and help type inference.
     this.chunks = (this as any).table('chunks');
     this.dataset = (this as any).table('dataset');
     this.feedbackLog = (this as any).table('feedbackLog');
     this.drafts = (this as any).table('drafts');
+    this.curationQueue = (this as any).table('curationQueue');
+    this.verificationQueue = (this as any).table('verificationQueue');
   }
 
 
@@ -103,6 +90,58 @@ class VectorDB extends Dexie {
 
   async getRecentFeedback(limit = 5): Promise<FeedbackLogEntry[]> {
     return this.feedbackLog.orderBy('timestamp').reverse().limit(limit).toArray();
+  }
+
+  // ---- Curation Queue Methods ----
+  async addPostsToQueue(posts: string[]): Promise<number> {
+    const existingCount = await this.curationQueue.count();
+    const items = posts.map(p => ({ postText: p }));
+    await this.curationQueue.bulkPut(items).catch('BulkError', () => {
+        // This is expected when there are duplicates due to the unique index.
+        // Dexie's bulkPut handles this gracefully; it will insert what it can.
+    });
+    const newCount = await this.curationQueue.count();
+    return newCount - existingCount; // Return number of new posts actually added
+  }
+
+  async getQueueCount(): Promise<number> {
+    return this.curationQueue.count();
+  }
+  
+  async getQueue(): Promise<string[]> {
+    const items = await this.curationQueue.orderBy('id').toArray();
+    return items.map(item => item.postText);
+  }
+
+  async dequeuePost(): Promise<string | undefined> {
+    const firstItem = await this.curationQueue.orderBy('id').first();
+    if (firstItem && typeof firstItem.id !== 'undefined') {
+      await this.curationQueue.delete(firstItem.id);
+      return firstItem.postText;
+    }
+    return undefined;
+  }
+  
+  async clearQueue(): Promise<void> {
+    await this.curationQueue.clear();
+  }
+
+  // ---- Verification Queue Methods ----
+  async addForVerification(postText: string, annotation: Annotation): Promise<number> {
+    return this.verificationQueue.add({ postText, annotation });
+  }
+
+  async getVerificationQueueCount(): Promise<number> {
+      return this.verificationQueue.count();
+  }
+
+  async dequeueForVerification(): Promise<VerificationQueueItem | undefined> {
+      const firstItem = await this.verificationQueue.orderBy('id').first();
+      if (firstItem && typeof firstItem.id !== 'undefined') {
+          await this.verificationQueue.delete(firstItem.id);
+          return firstItem;
+      }
+      return undefined;
   }
 }
 
