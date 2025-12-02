@@ -19,6 +19,7 @@ interface AppState {
     annotatorProgress: number;
     annotatorLogs: string[];
     currentVerificationItem: VerificationQueueItem | null;
+    isInitialized: boolean;
     
     setView: (view: AppView) => void;
     toggleTheme: () => void;
@@ -44,6 +45,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     annotatorProgress: 0,
     annotatorLogs: [],
     currentVerificationItem: null,
+    isInitialized: false,
 
     setView: (view) => set({ currentView: view }),
     toggleTheme: () => {
@@ -60,10 +62,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             const stats = await db.dataset.get('currentState');
             set({ 
                 queueCounts: { curation: c, verification: v },
-                datasetState: stats ? stats.data : INITIAL_DATASET_STATE 
+                datasetState: stats ? stats.data : INITIAL_DATASET_STATE,
+                isInitialized: true
             });
         } catch (e) {
             console.error("Init failed:", e);
+            // Even if failed, mark as initialized to stop loader, but maybe show error toast
+            set({ isInitialized: true });
         }
     },
 

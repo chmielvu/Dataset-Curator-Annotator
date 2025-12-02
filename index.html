@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Magdalenka Annotation Pipeline</title>
+    <title>Magdalenka SOTA v3</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+    <!-- React Flow CSS -->
     <link href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.3.0/dist/style.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -15,40 +16,22 @@
         darkMode: 'class',
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
             colors: {
               border: "hsl(var(--border))",
               input: "hsl(var(--input))",
               ring: "hsl(var(--ring))",
               background: "hsl(var(--background))",
               foreground: "hsl(var(--foreground))",
-              primary: {
-                DEFAULT: "hsl(var(--primary))",
-                foreground: "hsl(var(--primary-foreground))",
-              },
-              secondary: {
-                DEFAULT: "hsl(var(--secondary))",
-                foreground: "hsl(var(--secondary-foreground))",
-              },
-              destructive: {
-                DEFAULT: "hsl(var(--destructive))",
-                foreground: "hsl(var(--destructive-foreground))",
-              },
-              muted: {
-                DEFAULT: "hsl(var(--muted))",
-                foreground: "hsl(var(--muted-foreground))",
-              },
-              accent: {
-                DEFAULT: "hsl(var(--accent))",
-                foreground: "hsl(var(--accent-foreground))",
-              },
-              popover: {
-                DEFAULT: "hsl(var(--popover))",
-                foreground: "hsl(var(--popover-foreground))",
-              },
-              card: {
-                DEFAULT: "hsl(var(--card))",
-                foreground: "hsl(var(--card-foreground))",
-              },
+              primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
+              secondary: { DEFAULT: "hsl(var(--secondary))", foreground: "hsl(var(--secondary-foreground))" },
+              destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
+              muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
+              accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
+              card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
             },
             borderRadius: {
               lg: "var(--radius)",
@@ -56,42 +39,28 @@
               sm: "calc(var(--radius) - 4px)",
             },
             keyframes: {
-              "accordion-down": {
-                from: { height: "0" },
-                to: { height: "var(--radix-accordion-content-height)" },
-              },
-              "accordion-up": {
-                from: { height: "var(--radix-accordion-content-height)" },
-                to: { height: "0" },
+              "fly-to-queue": {
+                "0%": { transform: "translate(0, 0) scale(1)", opacity: "1" },
+                "80%": { opacity: "1" },
+                "100%": { transform: "translate(var(--tw-translate-x), var(--tw-translate-y)) scale(0.2)", opacity: "0" }
               },
               "pulse-strong": {
                 "0%, 100%": { opacity: "1" },
-                "50%": { opacity: "0.5" }
-              },
-              "fly-to-queue": {
-                "0%": { transform: "translate(0, 0)", opacity: "1" },
-                "100%": { transform: "translate(calc(-1 * var(--tw-translate-x)), calc(-1 * var(--tw-translate-y)))", opacity: "0" }
+                "50%": { opacity: "0.5", transform: "scale(0.95)" }
               }
             },
             animation: {
-              "accordion-down": "accordion-down 0.2s ease-out",
-              "accordion-up": "accordion-up 0.2s ease-out",
-              "pulse-strong": "pulse-strong 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-              "fly-to-queue": "fly-to-queue 1s ease-in-out forwards"
-            },
+              "fly-to-queue": "fly-to-queue 1s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+              "pulse-strong": "pulse-strong 2s cubic-bezier(0.4, 0, 0.6, 1) infinite"
+            }
           },
         },
       }
     </script>
     <script>
-      // Shim process for browser environments to support libraries expecting node env
       window.process = window.process || {};
       window.process.env = window.process.env || {};
       if (!window.process.env.NODE_ENV) window.process.env.NODE_ENV = 'development';
-      // Ensure API_KEY is accessible if injected, otherwise fallback but don't overwrite if existing
-      if (!window.process.env.API_KEY && window.process.env.API_KEY !== '') {
-        // Only set default if undefined
-      }
     </script>
     <script type="importmap">
 {
@@ -100,30 +69,27 @@
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime?dev",
     "react-dom": "https://esm.sh/react-dom@18.3.1?dev",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?dev",
-    "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.1.1?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-tooltip": "https://esm.sh/@radix-ui/react-tooltip@1.1.2?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-label": "https://esm.sh/@radix-ui/react-label@2.1.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.1.1?deps=react@18.3.1,react-dom@18.3.1",
-    "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.1.1?deps=react@18.3.1,react-dom@18.3.1",
     "@google/genai": "https://esm.sh/@google/genai@0.2.1",
     "uuid": "https://esm.sh/uuid@9.0.1",
     "dexie": "https://esm.sh/dexie@4.0.8",
     "clsx": "https://esm.sh/clsx@2.1.1",
     "tailwind-merge": "https://esm.sh/tailwind-merge@2.3.0",
     "lucide-react": "https://esm.sh/lucide-react@0.395.0?deps=react@18.3.1",
-    "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
     "sonner": "https://esm.sh/sonner@1.5.0?deps=react@18.3.1,react-dom@18.3.1",
     "zustand": "https://esm.sh/zustand@4.5.2?deps=react@18.3.1",
-    "zustand/middleware": "https://esm.sh/zustand@4.5.2/middleware?deps=react@18.3.1",
-    "@xyflow/react": "https://esm.sh/@xyflow/react@12.3.0?deps=react@18.3.1,react-dom@18.3.1",
-    "@xyflow/system": "https://esm.sh/@xyflow/system@0.0.42",
-    "dagre": "https://esm.sh/dagre@0.8.5",
-    "zod": "https://esm.sh/zod@3.23.8",
     "framer-motion": "https://esm.sh/framer-motion@11.2.10?deps=react@18.3.1,react-dom@18.3.1",
+    "zod": "https://esm.sh/zod@3.23.8",
+    "@xyflow/react": "https://esm.sh/@xyflow/react@12.3.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-tooltip": "https://esm.sh/@radix-ui/react-tooltip@1.1.2?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.1.1?deps=react@18.3.1,react-dom@18.3.1",
+    "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
+    "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-label": "https://esm.sh/@radix-ui/react-label@2.1.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.1.1?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.1.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.1.1?deps=react@18.3.1,react-dom@18.3.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/"
   }
@@ -131,89 +97,33 @@
 </script>
     <style>
       :root {
-        --background: 0 0% 100%;
-        --foreground: 240 10% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 240 10% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 3.9%;
-        --primary: 346.8 77.2% 49.8%;
-        --primary-foreground: 355.7 100% 97.3%;
-        --secondary: 240 4.8% 95.9%;
-        --secondary-foreground: 240 5.9% 10%;
-        --muted: 240 4.8% 95.9%;
-        --muted-foreground: 240 3.8% 46.1%;
-        --accent: 240 4.8% 95.9%;
-        --accent-foreground: 240 5.9% 10%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 240 5.9% 90%;
-        --input: 240 5.9% 90%;
-        --ring: 346.8 77.2% 49.8%;
+        --background: 0 0% 100%; --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%; --card-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%; --popover-foreground: 240 10% 3.9%;
+        --primary: 346.8 77.2% 49.8%; --primary-foreground: 355.7 100% 97.3%;
+        --secondary: 240 4.8% 95.9%; --secondary-foreground: 240 5.9% 10%;
+        --muted: 240 4.8% 95.9%; --muted-foreground: 240 3.8% 46.1%;
+        --accent: 240 4.8% 95.9%; --accent-foreground: 240 5.9% 10%;
+        --destructive: 0 84.2% 60.2%; --destructive-foreground: 0 0% 98%;
+        --border: 240 5.9% 90%; --input: 240 5.9% 90%; --ring: 346.8 77.2% 49.8%;
         --radius: 0.5rem;
       }
- 
       .dark {
-        --background: 20 14.3% 4.1%;
-        --foreground: 0 0% 95%;
-        --card: 24 9.8% 10%;
-        --card-foreground: 0 0% 95%;
-        --popover: 0 0% 9%;
-        --popover-foreground: 0 0% 95%;
-        --primary: 346.8 77.2% 49.8%;
-        --primary-foreground: 355.7 100% 97.3%;
-        --secondary: 240 3.7% 15.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 15%;
-        --muted-foreground: 240 5% 64.9%;
-        --accent: 12 6.5% 15.1%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 85.7% 97.3%;
-        --border: 240 3.7% 15.9%;
-        --input: 240 3.7% 15.9%;
-        --ring: 346.8 77.2% 49.8%;
+        --background: 20 14.3% 4.1%; --foreground: 0 0% 95%;
+        --card: 24 9.8% 10%; --card-foreground: 0 0% 95%;
+        --popover: 0 0% 9%; --popover-foreground: 0 0% 95%;
+        --primary: 346.8 77.2% 49.8%; --primary-foreground: 355.7 100% 97.3%;
+        --secondary: 240 3.7% 15.9%; --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 15%; --muted-foreground: 240 5% 64.9%;
+        --accent: 12 6.5% 15.1%; --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%; --destructive-foreground: 0 85.7% 97.3%;
+        --border: 240 3.7% 15.9%; --input: 240 3.7% 15.9%; --ring: 346.8 77.2% 49.8%;
       }
-      
-      body {
-        font-family: 'Inter', sans-serif;
-        background-color: hsl(var(--background));
-        color: hsl(var(--foreground));
-      }
-      
-      /* React Flow Styles */
-      .react-flow__node {
-        border-radius: 8px;
-        font-family: 'JetBrains Mono', monospace;
-      }
-      .react-flow__handle {
-        background: hsl(var(--primary));
-        width: 8px;
-        height: 8px;
-      }
-      .react-flow__controls {
-        box-shadow: none;
-        border: 1px solid hsl(var(--border));
-        border-radius: 4px;
-        overflow: hidden;
-      }
-      .react-flow__controls-button {
-        background: hsl(var(--card));
-        color: hsl(var(--foreground));
-        border-bottom: 1px solid hsl(var(--border));
-      }
-      .react-flow__controls-button:hover {
-        background: hsl(var(--muted));
-      }
-      .react-flow__minimap {
-        background: hsl(var(--card));
-        border: 1px solid hsl(var(--border));
-        border-radius: 4px;
-      }
+      body { @apply bg-background text-foreground font-sans; }
     </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

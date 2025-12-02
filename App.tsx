@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from './store/useAppStore';
-import { Search, Terminal, ShieldCheck, LayoutDashboard, Database, Moon, Sun, Sparkles } from 'lucide-react';
+import { Search, Terminal, ShieldCheck, LayoutDashboard, Database, Moon, Sun, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
 import CuratorView from './components/CuratorView';
 import AnnotatorView from './components/AnnotatorView';
 import VerificationView from './components/VerificationView';
@@ -35,13 +35,39 @@ const SidebarItem = ({ view, icon: Icon, label, count }: any) => {
 };
 
 export default function App() {
-    const { initializeData, queueCounts, theme, toggleTheme, currentView } = useAppStore();
+    const { initializeData, queueCounts, theme, toggleTheme, currentView, isInitialized } = useAppStore();
+    const [isSlowLoading, setIsSlowLoading] = useState(false);
 
     useEffect(() => {
         initializeData();
         // Set initial theme class
         document.documentElement.classList.add('dark');
     }, []);
+
+    useEffect(() => {
+        let timeoutId: ReturnType<typeof setTimeout>;
+        if (!isInitialized) {
+            timeoutId = setTimeout(() => {
+                setIsSlowLoading(true);
+            }, 3000); // Show message if loading takes longer than 3s
+        }
+        return () => clearTimeout(timeoutId);
+    }, [isInitialized]);
+
+    if (!isInitialized) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-background text-foreground flex-col gap-4">
+                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                 <p className="text-muted-foreground font-mono text-sm animate-pulse">Initializing SOTA Pipeline...</p>
+                 {isSlowLoading && (
+                     <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-4 py-2 rounded-md animate-in fade-in slide-in-from-bottom-2">
+                         <AlertTriangle className="h-4 w-4" />
+                         <span className="text-xs">Loading large dataset... please wait.</span>
+                     </div>
+                 )}
+            </div>
+        );
+    }
 
     return (
         <div className="flex min-h-screen bg-background text-foreground">

@@ -191,30 +191,35 @@ export async function runQCAgentAction(post: string, annotation: Annotation): Pr
 /**
  * AGENT 4: KNOWLEDGE GRAPH ENGINEER (Gemini 3 Pro + Python)
  * The "Neuro-Symbolic Loop" - executes Python to generate strict JSON for React Flow.
- * Implements "Iron Sandbox" safety protocol.
+ * Implements "Iron Sandbox" safety protocol with Base64 encoding.
  */
 export async function runKnowledgeGraphAction(feedbackLog: FeedbackLogEntry[]) {
     // We strictly follow the "Python-to-JSON-to-React" bridge pattern
-    const nodesData = JSON.stringify(feedbackLog.slice(0, 100).map(f => ({
+    // SOTA Safety: Base64 encode the data to prevent python syntax errors/injections
+    const nodesData = feedbackLog.slice(0, 100).map(f => ({
         id: f.id,
         tactics: f.correctedAnnotation.tactics,
         cleavages: f.correctedAnnotation.labels
-    })));
+    }));
+    
+    // Polyfill for btoa in Node/Env if needed, or use Buffer. 
+    // Since this is client-side running logic usually, btoa works.
+    const base64Data = btoa(unescape(encodeURIComponent(JSON.stringify(nodesData))));
 
     const prompt = `
     You are a Network Scientist using 'networkx'.
     
-    **DATA**: ${nodesData}
-    
     **TASK**:
-    1. Parse the data. Create a graph G.
-    2. Add nodes for TACTICS (Blue) and CLEAVAGES (Pink).
-    3. Add edges weighted by co-occurrence.
-    4. Run 'nx.spring_layout(G, k=0.8, iterations=50, seed=42)' to calculate X/Y coordinates.
-    5. Export the graph to a JSON object compatible with React Flow.
+    1. Decode the Base64 data provided below.
+    2. Create a graph G.
+    3. Add nodes for TACTICS (Blue) and CLEAVAGES (Pink).
+    4. Add edges weighted by co-occurrence.
+    5. Run 'nx.spring_layout(G, k=0.8, iterations=50, seed=42)' to calculate X/Y coordinates.
+    6. Export the graph to a JSON object compatible with React Flow.
     
     **IRON SANDBOX PROTOCOL**:
     import json
+    import base64
     import networkx as nx
     import traceback
     
@@ -223,14 +228,20 @@ export async function runKnowledgeGraphAction(feedbackLog: FeedbackLogEntry[]) {
         print(json.dumps(data))
 
     try:
-        # Build your graph G here based on 'nodesData'
-        # [Placeholder for python logic]
-        # nodes = ...
-        # edges = ...
+        # 1. Load Data Securely
+        encoded_data = "${base64Data}"
+        decoded_bytes = base64.b64decode(encoded_data)
+        nodes_data = json.loads(decoded_bytes.decode('utf-8'))
         
-        # NOTE: This is a simulated environment prompt. 
-        # The python code you generate MUST perform the actual logic on the input data.
-        # DO NOT print the mockup data below. You must calculate the nodes and edges from 'nodesData'.
+        # 2. Build Graph
+        G = nx.DiGraph()
+        
+        for entry in nodes_data:
+            # [Logic to build graph from entry]
+            pass
+
+        # NOTE: The python code you generate MUST perform the actual logic on the input data.
+        # DO NOT print the mockup data below. You must calculate the nodes and edges from 'nodes_data'.
         
         # FINAL STEP:
         # result = { "nodes": [...], "edges": [...] }

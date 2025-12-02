@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -8,6 +7,7 @@ import { Network, Activity, FileText, Sparkles, BrainCircuit } from 'lucide-reac
 import { db } from '../lib/dexie';
 import { runKnowledgeGraphAction } from '../actions';
 import KnowledgeGraph from './KnowledgeGraph';
+import { getCleavageName, getTacticName } from '../utils/codex';
 
 export default function DashboardView() {
     const { datasetState } = useAppStore();
@@ -115,7 +115,7 @@ export default function DashboardView() {
                                 .slice(0,5)
                                 .map(([key, val]) => (
                                     <div key={key} className="flex justify-between items-center text-sm border-b pb-2 last:border-0">
-                                        <span className="capitalize text-muted-foreground">{key.replace('cleavage_', '').replace(/_/g, ' ')}</span>
+                                        <span className="capitalize text-muted-foreground">{getCleavageName(key)}</span>
                                         <span className="font-mono font-bold text-primary">{val as number}</span>
                                     </div>
                                 ))
@@ -131,7 +131,7 @@ export default function DashboardView() {
                                 .slice(0,5)
                                 .map(([key, val]) => (
                                     <div key={key} className="flex justify-between items-center text-sm border-b pb-2 last:border-0">
-                                        <span className="capitalize text-muted-foreground">{key.replace('tactic_', '').replace(/_/g, ' ')}</span>
+                                        <span className="capitalize text-muted-foreground">{getTacticName(key)}</span>
                                         <span className="font-mono font-bold text-foreground">{val as number}</span>
                                     </div>
                                 ))
