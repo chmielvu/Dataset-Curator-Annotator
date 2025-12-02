@@ -1,8 +1,15 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, PropsWithChildren, FC, useState } from 'react';
 import { Annotation, UiSuggestion } from '../types';
 import { CLEAVAGE_IDS, TACTIC_IDS, EMOTION_IDS, STANCE_LABELS } from '../utils/constants';
 import { TACTIC_ID_TO_NAME, EMOTION_ID_TO_NAME, getCleavageName } from '../utils/codex';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Button } from './ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 interface AnnotationEditorProps {
   annotation: Annotation;
@@ -11,22 +18,163 @@ interface AnnotationEditorProps {
   onApplySuggestion: (suggestion: UiSuggestion) => void;
 }
 
-// --- Suggestion Tooltip ---
-const SuggestionTooltip: React.FC<{ suggestion: UiSuggestion; onApply: (suggestion: UiSuggestion) => void; }> = ({ suggestion, onApply }) => (
-  <div className="absolute z-10 -top-2 left-1/2 -translate-x-1/2 -translate-y-full w-64 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-2 opacity-100 transition-opacity pointer-events-auto">
-    <p className="font-bold mb-1">Agent Suggestion:</p>
-    <p className="mb-2 italic">"{suggestion.rationale}"</p>
-    <button
-      onClick={() => onApply(suggestion)}
-      className="w-full text-center px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded text-xs"
-    >
-      Apply Suggestion
-    </button>
-    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-slate-800"></div>
-  </div>
-);
+const SuggestionWrapper: FC<PropsWithChildren<{ suggestion?: UiSuggestion, onApplySuggestion: (suggestion: UiSuggestion) => void }>> = ({ suggestion, onApplySuggestion, children }) => {
+  if (!suggestion) {
+    return <>{children}</>;
+  }
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="relative ring-2 ring-yellow-400 rounded-md p-1 group">
+            {children}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="w-64" side="top">
+            <p className="font-bold mb-1">Agent Suggestion:</p>
+            <p className="mb-2 italic">"{suggestion.rationale}"</p>
+            <Button
+              size="sm"
+              onClick={() => onApplySuggestion(suggestion)}
+              className="w-full bg-rose-600 hover:bg-rose-700"
+            >
+              Apply Suggestion
+            </Button>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
 
-const AnnotationEditor: React.FC<AnnotationEditorProps> = ({ annotation, onEdit, suggestionsMap, onApplySuggestion }) => {
+// Searchable Single Select Component
+const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  suggestion, 
+  onApplySuggestion 
+}: any) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const filtered = options.filter((op: string) => op.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <SuggestionWrapper suggestion={suggestion} onApplySuggestion={onApplySuggestion}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+            {value ? <span className="truncate">{value}</span> : <span className="text-muted-foreground">{placeholder}</span>}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0" align="start">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input 
+               className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+               placeholder={`Search...`}
+               value={search}
+               onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="max-h-[200px] overflow-y-auto p-1">
+             {filtered.length === 0 && <div className="py-6 text-center text-sm text-muted-foreground">No results found.</div>}
+             {filtered.map((opt: string) => (
+               <div 
+                 key={opt}
+                 className={cn("relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50", 
+                 value === opt && "bg-accent text-accent-foreground")}
+                 onClick={() => { onChange(opt); setOpen(false); }}
+               >
+                 <Check className={cn("mr-2 h-4 w-4", value === opt ? "opacity-100" : "opacity-0")} />
+                 {opt}
+               </div>
+             ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </SuggestionWrapper>
+  );
+};
+
+// Searchable Multi Select Component
+const SearchableMultiSelect = ({ 
+    options, 
+    selected, 
+    onChange, 
+    placeholder, 
+    suggestion, 
+    onApplySuggestion 
+}: any) => {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    
+    const filtered = options.filter((op: string) => op.toLowerCase().includes(search.toLowerCase()));
+  
+    const toggle = (opt: string) => {
+        if (selected.includes(opt)) {
+            onChange(selected.filter((s: string) => s !== opt));
+        } else {
+            onChange([...selected, opt]);
+        }
+    };
+
+    return (
+      <SuggestionWrapper suggestion={suggestion} onApplySuggestion={onApplySuggestion}>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between h-auto min-h-[2.5rem] py-2">
+                <div className="flex flex-wrap gap-1 text-left">
+                  {selected.length > 0 ? (
+                      selected.map((val: string) => (
+                          <div key={val} className="inline-flex items-center rounded-sm border px-1 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground" onClick={(e) => { e.stopPropagation(); toggle(val); }}>
+                              {val}
+                              <X className="ml-1 h-3 w-3 text-muted-foreground hover:text-foreground cursor-pointer" />
+                          </div>
+                      ))
+                  ) : (
+                      <span className="text-muted-foreground font-normal">{placeholder}</span>
+                  )}
+                </div>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-0" align="start">
+            <div className="flex items-center border-b px-3">
+              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+              <input 
+                 className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                 placeholder={`Search...`}
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="max-h-[200px] overflow-y-auto p-1">
+               {filtered.length === 0 && <div className="py-6 text-center text-sm text-muted-foreground">No results found.</div>}
+               {filtered.map((opt: string) => {
+                 const isSelected = selected.includes(opt);
+                 return (
+                 <div 
+                   key={opt}
+                   className={cn("relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", isSelected && "bg-secondary")}
+                   onClick={() => toggle(opt)}
+                 >
+                   <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}>
+                     <Check className={cn("h-4 w-4")} />
+                   </div>
+                   {opt}
+                 </div>
+               )})}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </SuggestionWrapper>
+    );
+};
+
+const AnnotationEditor: FC<AnnotationEditorProps> = ({ annotation, onEdit, suggestionsMap, onApplySuggestion }) => {
   const TACTIC_NAMES = useMemo(() => TACTIC_IDS.map(id => TACTIC_ID_TO_NAME.get(id) || id), []);
   const EMOTION_NAMES = useMemo(() => EMOTION_IDS.map(id => EMOTION_ID_TO_NAME.get(id) || id), []);
 
@@ -36,57 +184,71 @@ const AnnotationEditor: React.FC<AnnotationEditorProps> = ({ annotation, onEdit,
     onEdit('labels', newLabels, `labels[${index}]`);
   };
 
-  const handleTacticChange = (tacticName: string) => {
-    const newTactics = annotation.tactics.includes(tacticName)
-      ? annotation.tactics.filter(t => t !== tacticName)
-      : [...annotation.tactics, tacticName];
+  const handleTacticsChange = (newTactics: string[]) => {
     onEdit('tactics', newTactics);
   };
   
   return (
-    <div className="my-6 p-4 bg-white dark:bg-slate-700/50 border rounded-lg dark:border-slate-600/50 space-y-6">
-      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">Manual Annotation Editor</h3>
+    <div className="space-y-6">
       <div className="space-y-3">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Cleavages</label>
+        <Label>Cleavages</Label>
         {CLEAVAGE_IDS.map((id, index) => {
           const field_path = `labels[${index}]`;
           const suggestion = suggestionsMap.get(field_path);
           return (
-          <div key={id} className="grid grid-cols-5 gap-2 items-center relative group">
-            {suggestion && <SuggestionTooltip suggestion={suggestion} onApply={onApplySuggestion} />}
-            <label htmlFor={id} className="text-xs text-slate-600 dark:text-slate-400 col-span-2 capitalize truncate" title={getCleavageName(id)}>{getCleavageName(id)}</label>
-            <input type="range" id={id} min="0" max="1" step="0.1" value={annotation.labels[index]} onChange={(e) => handleLabelChange(index, e.target.value)} className={`w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer col-span-2 ${suggestion ? 'ring-2 ring-yellow-400' : ''}`}/>
-            <span className="text-sm font-mono text-slate-800 dark:text-slate-200 text-right">{annotation.labels[index].toFixed(1)}</span>
-          </div>
+            <SuggestionWrapper key={id} suggestion={suggestion} onApplySuggestion={onApplySuggestion}>
+              <div className="grid grid-cols-5 gap-2 items-center">
+                <Label htmlFor={id} className="text-xs text-muted-foreground col-span-2 capitalize truncate" title={getCleavageName(id)}>
+                  {getCleavageName(id)}
+                </Label>
+                <Input type="range" id={id} min="0" max="1" step="0.1" value={annotation.labels[index]} onChange={(e) => handleLabelChange(index, e.target.value)} className="w-full h-2 rounded-lg appearance-none cursor-pointer col-span-2"/>
+                <span className="text-sm font-mono text-foreground text-right">{annotation.labels[index].toFixed(1)}</span>
+              </div>
+            </SuggestionWrapper>
         )})}
       </div>
+      
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 relative group">Tactics{suggestionsMap.has('tactics') && <SuggestionTooltip suggestion={suggestionsMap.get('tactics')!} onApply={onApplySuggestion} />}</label>
-        <div className={`mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 rounded-md ${suggestionsMap.has('tactics') ? 'ring-2 ring-yellow-400' : ''}`}>
-          {TACTIC_NAMES.map(tacticName => (
-            <label key={tacticName} className="flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300">
-              <input type="checkbox" checked={annotation.tactics.includes(tacticName)} onChange={() => handleTacticChange(tacticName)} className="h-4 w-4 text-rose-600 border-slate-300 dark:border-slate-500 rounded focus:ring-rose-500"/>
-              <span className="capitalize" title={tacticName}>{tacticName}</span>
-            </label>
-          ))}
-        </div>
+        <Label className="mb-2 block">Tactics</Label>
+        <SearchableMultiSelect 
+          options={TACTIC_NAMES} 
+          selected={annotation.tactics} 
+          onChange={handleTacticsChange}
+          placeholder="Select tactics..."
+          suggestion={suggestionsMap.get('tactics')}
+          onApplySuggestion={onApplySuggestion}
+        />
       </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[{id: 'stance_label', label: 'Stance', options: STANCE_LABELS}, {id: 'emotion_fuel', label: 'Emotion Fuel', options: EMOTION_NAMES}, {id: 'stance_target', label: 'Stance Target'}].map(field => {
-             const suggestion = suggestionsMap.get(field.id);
-             return (
-            <div key={field.id} className="relative group">
-                {suggestion && <SuggestionTooltip suggestion={suggestion} onApply={onApplySuggestion} />}
-                <label htmlFor={field.id} className="block text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}</label>
-                {field.options ? (
-                    <select id={field.id} value={(annotation as any)[field.id]} onChange={(e) => onEdit(field.id as keyof Annotation, e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-rose-500 sm:text-sm ${suggestion ? 'ring-2 ring-yellow-400' : ''}`}>
-                        {field.options.map(opt => <option key={opt} value={opt} className="capitalize">{opt}</option>)}
-                    </select>
-                ) : (
-                    <input type="text" id={field.id} value={(annotation as any)[field.id]} onChange={(e) => onEdit(field.id as keyof Annotation, e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-rose-500 sm:text-sm ${suggestion ? 'ring-2 ring-yellow-400' : ''}`}/>
-                )}
-            </div>
-        )})}
+        <div>
+           <SuggestionWrapper suggestion={suggestionsMap.get('stance_label')} onApplySuggestion={onApplySuggestion}>
+              <Label htmlFor="stance_label">Stance</Label>
+              <Select value={(annotation as any)['stance_label']} onValueChange={(value) => onEdit('stance_label', value)}>
+                <SelectTrigger id="stance_label"><SelectValue placeholder="Select stance" /></SelectTrigger>
+                <SelectContent>
+                  {STANCE_LABELS.map(opt => <SelectItem key={opt} value={opt} className="capitalize">{opt}</SelectItem>)}
+                </SelectContent>
+              </Select>
+           </SuggestionWrapper>
+        </div>
+        <div>
+           <Label htmlFor="emotion_fuel" className="mb-2 block">Emotion Fuel</Label>
+           <SearchableSelect 
+             options={EMOTION_NAMES}
+             value={(annotation as any)['emotion_fuel']}
+             onChange={(value: string) => onEdit('emotion_fuel', value)}
+             placeholder="Select emotion..."
+             suggestion={suggestionsMap.get('emotion_fuel')}
+             onApplySuggestion={onApplySuggestion}
+           />
+        </div>
+        <div>
+           <SuggestionWrapper suggestion={suggestionsMap.get('stance_target')} onApplySuggestion={onApplySuggestion}>
+            <Label htmlFor="stance_target">Stance Target</Label>
+            <Input type="text" id="stance_target" value={(annotation as any)['stance_target']} onChange={(e) => onEdit('stance_target', e.target.value)}/>
+          </SuggestionWrapper>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
-
-// Based on Magdalenka Codex Classification.json
+// Based on public/codex.json
 
 // The order MUST match the model's output array
 export const CLEAVAGE_IDS = [
@@ -10,7 +9,7 @@ export const CLEAVAGE_IDS = [
     "cleavage_trauma"
 ];
 
-// Based on Magdalenka Codex Classification.json
+// Based on codex.json
 export const TACTIC_IDS = [
     "tactic_loaded_language",
     "tactic_dog_whistling",
@@ -30,7 +29,7 @@ export const TACTIC_IDS = [
     "tactic_moralization"
 ];
 
-// Based on Magdalenka Codex Classification.json
+// Based on codex.json
 export const EMOTION_IDS = [
     "emotion_anger",
     "emotion_resentment",

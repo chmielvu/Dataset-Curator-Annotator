@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "properties": {
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 5,
+      "maxItems": 5,
+      "description": "Array of 5 float scores (0.0-1.0) representing cleavage activation: [Post-Peasant, Economic Anxiety, Sovereigntist, Generational, Trauma]"
+    },
+    "tactics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of manipulative tactics identified (e.g., 'Loaded Language', 'Whataboutism')"
+    },
+    "emotion_fuel": {
+      "type": "string",
+      "description": "The primary emotion fueling the post (e.g., 'Anger', 'Pride')"
+    },
+    "stance_label": {
+      "type": "string",
+      "enum": ["AGAINST", "FOR", "NEUTRAL"],
+      "description": "The stance of the author towards the target."
+    },
+    "stance_target": {
+      "type": "string",
+      "description": "The specific entity, group, or idea that is the target of the stance."
+    }
+  },
+  "required": [
+    "labels",
+    "tactics",
+    "emotion_fuel",
+    "stance_label",
+    "stance_target"
+  ]
+}

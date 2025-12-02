@@ -1,4 +1,5 @@
 
+
 export interface DatasetState {
   cleavages: {
     [key: string]: number; // e.g., 'cleavage_post_peasant': 10
@@ -136,4 +137,17 @@ export interface CurationJob {
   batchesRequested: number;
   batchesCompleted: number;
   postsFound: number;
+}
+
+// ---- Telemetry ----
+export interface TelemetryEvent {
+  id?: number;
+  agent: 'Curator' | 'Annotator' | 'Verifier' | 'System';
+  action: string; // e.g., 'run_batch', 'annotate_post'
+  status: 'success' | 'failure';
+  duration_ms: number;
+  timestamp: string;
+  errorType?: string;
+  errorMessage?: string;
+  metadata?: any;
 }

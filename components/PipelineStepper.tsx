@@ -1,26 +1,38 @@
-
-import React from 'react';
+import React, { FC } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface PipelineHeaderProps {
   curationQueueCount: number;
   verificationQueueCount: number;
 }
 
-const PipelineHeader: React.FC<PipelineHeaderProps> = ({ curationQueueCount, verificationQueueCount }) => {
+const PipelineHeader: FC<PipelineHeaderProps> = ({ curationQueueCount, verificationQueueCount }) => {
   return (
-    <div className="mb-8 p-4 bg-slate-100 dark:bg-slate-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Pipeline</h3>
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
-        <div className="p-3 bg-white dark:bg-slate-800 rounded-md border dark:border-slate-700">
-          <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">{curationQueueCount}</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Ready to Annotate</p>
+    <Card className="mb-8">
+      <CardHeader>
+        <CardTitle>Pipeline Status</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-2xl text-rose-600 dark:text-rose-400">{curationQueueCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Ready to Annotate</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-2xl text-rose-600 dark:text-rose-400">{verificationQueueCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Pending Verification</p>
+            </CardContent>
+          </Card>
         </div>
-        <div className="p-3 bg-white dark:bg-slate-800 rounded-md border dark:border-slate-700">
-          <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">{verificationQueueCount}</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Pending Verification</p>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

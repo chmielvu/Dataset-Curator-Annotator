@@ -1,7 +1,6 @@
-
 import { CLEAVAGE_IDS, TACTIC_IDS, EMOTION_IDS } from './constants';
 
-// Manually created maps from Magdalenka Codex Classification.json to ensure data integrity.
+// Manually created maps from codex.json to ensure data integrity.
 // This is a critical fix to prevent mismatches from simplified, dynamically generated names.
 
 const TACTIC_ID_TO_NAME_MAP = new Map([

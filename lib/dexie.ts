@@ -1,6 +1,5 @@
-
 import Dexie, { Table } from 'dexie';
-import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry, Draft, VerificationQueueItem, Annotation } from '../types';
+import { DocChunk, ArchiveSummary, DatasetState, FeedbackLogEntry, Draft, VerificationQueueItem, Annotation, TelemetryEvent } from '../types';
 
 // Helper function for client-side vector search
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -27,16 +26,19 @@ class VectorDB extends Dexie {
   drafts: Table<Draft, string>;
   curationQueue: Table<{ id?: number; postText: string }, number>;
   verificationQueue: Table<VerificationQueueItem, number>;
+  telemetry: Table<TelemetryEvent, number>;
 
   constructor() {
     super('MagdalenkaVectorDB');
-    (this as any).version(6).stores({
+    // Bump version to 10 to ensure clean schema for new tables
+    (this as any).version(10).stores({
       chunks: 'id, source',
       dataset: '&id',
       feedbackLog: '++id, timestamp',
       drafts: '&postText',
       curationQueue: '++id, &postText',
-      verificationQueue: '++id'
+      verificationQueue: '++id',
+      telemetry: '++id, agent, action, status, timestamp'
     });
     
     this.chunks = (this as any).table('chunks');
@@ -45,6 +47,7 @@ class VectorDB extends Dexie {
     this.drafts = (this as any).table('drafts');
     this.curationQueue = (this as any).table('curationQueue');
     this.verificationQueue = (this as any).table('verificationQueue');
+    this.telemetry = (this as any).table('telemetry');
   }
 
 
@@ -142,6 +145,16 @@ class VectorDB extends Dexie {
           return firstItem;
       }
       return undefined;
+  }
+
+  // ---- Telemetry Methods ----
+  async addTelemetry(event: Omit<TelemetryEvent, 'id'>): Promise<number> {
+      return this.telemetry.add(event as TelemetryEvent);
+  }
+  
+  public deleteDatabase(): Promise<void> {
+    // This wraps Dexie's delete() method to delete the entire database.
+    return Dexie.delete('MagdalenkaVectorDB');
   }
 }
 

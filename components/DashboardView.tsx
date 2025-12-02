@@ -1,374 +1,145 @@
 
-import React from 'react';
-import { useState } from 'react';
-import { DatasetState, Annotation } from '../types';
+import React, { useState } from 'react';
+import { useAppStore } from '../store/useAppStore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Button } from './ui/button';
+import { toast } from 'sonner';
+import { Network, Activity, FileText, Sparkles, BrainCircuit } from 'lucide-react';
 import { db } from '../lib/dexie';
+import { runKnowledgeGraphAction } from '../actions';
+import KnowledgeGraph from './KnowledgeGraph';
 
+export default function DashboardView() {
+    const { datasetState } = useAppStore();
+    const [graphData, setGraphData] = useState<any>(null);
+    const [loadingGraph, setLoadingGraph] = useState(false);
 
-const StatCard: React.FC<{ title: string; value: number; icon: React.ReactNode }> = ({ title, value, icon }) => (
-  <div className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border dark:border-slate-700 flex items-center space-x-4">
-    <div className="flex-shrink-0 text-rose-500 dark:text-rose-400">{icon}</div>
-    <div>
-      <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
-      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{value.toLocaleString()}</p>
-    </div>
-  </div>
-);
-
-
-const Chart: React.FC<{ title: string; data: { [key: string]: number }; color: string }> = ({ title, data, color }) => {
-  const sortedData = Object.entries(data)
-    .map(([name, count]) => ({ name: name.replace(/^(cleavage|tactic|emotion)_/, '').replace(/_/g, ' '), count: count as number }))
-    .filter(item => item.count > 0) 
-    .sort((a, b) => b.count - a.count);
-
-  if (sortedData.length === 0) {
-    return (
-      <div className="p-4 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 capitalize">{title}</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400">No data annotated yet for this category.</p>
-      </div>
-    );
-  }
-
-  const maxCount = Math.max(...sortedData.map(d => d.count), 1);
-
-  return (
-    <div className="p-4 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4 capitalize">{title}</h3>
-      <div className="space-y-3">
-        {sortedData.map(item => (
-          <div key={item.name} className="grid grid-cols-3 items-center gap-4 text-sm">
-            <span className="text-slate-600 dark:text-slate-400 truncate capitalize col-span-1" title={item.name}>
-              {item.name}
-            </span>
-            <div className="bg-slate-200 dark:bg-slate-700 rounded-full h-5 col-span-2 relative">
-              <div
-                className={`${color} h-5 rounded-full flex items-center justify-end text-right pr-2 transition-all duration-500 ease-out`}
-                style={{ width: `${(item.count / maxCount) * 100}%` }}
-              >
-                <span className="text-xs font-bold text-white shadow-sm">{item.count}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const DatasetUploader: React.FC<{ onUpload: (annotations: Annotation[]) => void; }> = ({ onUpload }) => {
-    const [isUploading, setIsUploading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-    const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        if (!file.name.endsWith('.json')) {
-            setError('Invalid file type. Please select a .json file.');
-            return;
-        }
-
-        setIsUploading(true);
-        setError(null);
-
-        try {
-            const text = await file.text();
-            const annotations = JSON.parse(text) as Annotation[];
-            if (!Array.isArray(annotations)) {
-              throw new Error("Invalid JSON format. The file must contain an array of annotation objects.");
-            }
-            onUpload(annotations);
-        } catch (e: any) {
-            let errorMessage = `Failed to parse ${file.name}.`;
-            if (e instanceof SyntaxError) {
-              errorMessage += " The file does not contain valid JSON. Please ensure it's a correctly formatted JSON array.";
-            } else {
-              errorMessage += ` Error: ${e.message}`;
-            }
-            setError(errorMessage);
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
-    };
-
-
-  return (
-    <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-        <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Load Existing Dataset</h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Upload a JSON file containing an array of annotations. This will reset the current dashboard and state to reflect the uploaded data.</p>
-        
-        {error && (
-            <div className="p-3 my-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-500/50 text-red-800 dark:text-red-300 text-sm rounded-md whitespace-pre-wrap">
-                {error}
-            </div>
-        )}
-
-        <label 
-          className={`inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-500 shadow-sm text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-500 transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        >
-          {isUploading ? (
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          ) : (
-            <svg className="w-5 h-5 mr-2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
-            </svg>
-          )}
-          <span>{isUploading ? 'Processing...' : 'Upload .json File'}</span>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} disabled={isUploading} accept=".json" />
-        </label>
-    </div>
-  );
-};
-
-const AdvancedAnalysis: React.FC = () => {
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
-    const [analysisImage, setAnalysisImage] = useState<string | null>(null);
-
-    const handleRunAnalysis = async () => {
-        setIsAnalyzing(true);
-        setAnalysisError(null);
-        setAnalysisImage(null);
-
+    const generateGraph = async () => {
+        setLoadingGraph(true);
+        const toastId = toast.loading("Gemini 3 Pro is initializing Code Execution Sandbox...");
         try {
             const feedbackLog = await db.feedbackLog.toArray();
-            if (feedbackLog.length === 0) {
-                setAnalysisError("No feedback log data is available to analyze. Please process some items through QC first.");
-                return;
-            }
+            if (feedbackLog.length === 0) throw new Error("Need verified annotations to build a meaningful graph.");
 
-            const response = await fetch('/api/advanced-analysis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ feedbackLog }),
-            });
+            const data = await runKnowledgeGraphAction(feedbackLog);
+            if (!data || (!data.nodes.length && !data.edges.length)) {
+                 throw new Error("Model failed to generate graph data (output empty).");
+            }
             
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.details || data.error || 'The analysis agent failed to generate a report.');
-            }
-
-            if (data.base64Image) {
-                setAnalysisImage(`data:image/png;base64,${data.base64Image}`);
-            } else {
-                 throw new Error('Analysis agent did not return a valid image.');
-            }
-
-        } catch (err: any) {
-            setAnalysisError(err.message);
+            setGraphData(data);
+            toast.success("Graph Generated via Python NetworkX", { id: toastId });
+        } catch(e: any) {
+            toast.error("Generation Failed", { id: toastId, description: e.message });
         } finally {
-            setIsAnalyzing(false);
+            setLoadingGraph(false);
         }
     };
 
-    return (
-        <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-            <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Tactic Drift Analysis (via Code Interpreter)</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                Generate a data-rich visualization from the QC feedback log using a Python sandbox. This provides deeper insights into annotation drift and quality.
-            </p>
-            <button
-                onClick={handleRunAnalysis}
-                disabled={isAnalyzing}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed"
-            >
-                {isAnalyzing && (
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                )}
-                {isAnalyzing ? 'Analyzing...' : 'Generate Tactic Agreement Report'}
-            </button>
+    const totalCleavageSignal = (Object.values(datasetState.cleavages) as number[]).reduce((a, b) => a + b, 0);
 
-            <div className="mt-4">
-                {analysisError && (
-                    <div className="p-3 my-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-500/50 text-red-800 dark:text-red-300 text-sm rounded-md">
-                        <strong>Error:</strong> {analysisError}
-                    </div>
-                )}
-                {isAnalyzing && !analysisImage && (
-                    <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/50 animate-pulse">
-                        <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                    </div>
-                )}
-                {analysisImage && (
-                    <div className="p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/50">
-                        <img src={analysisImage} alt="Advanced Analysis Report" className="w-full h-auto rounded" />
-                    </div>
-                )}
+    return (
+        <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Magdalenka Dashboard</h2>
+                    <p className="text-muted-foreground">Neuro-symbolic Knowledge Graph powered by Gemini 3 Code Execution.</p>
+                </div>
+                <Button onClick={generateGraph} disabled={loadingGraph} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                    {loadingGraph ? <BrainCircuit className="animate-spin h-4 w-4"/> : <Sparkles className="h-4 w-4"/>}
+                    {loadingGraph ? "Executing Python..." : "Build Graph (Gemini 3)"}
+                </Button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Verified Posts</CardTitle>
+                        <FileText className="h-4 w-4 text-muted-foreground"/>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{datasetState.total_annotations_processed}</div>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Signals</CardTitle>
+                        <Activity className="h-4 w-4 text-muted-foreground"/>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{totalCleavageSignal}</div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-2 min-h-[500px] flex flex-col border-primary/20">
+                     <CardHeader>
+                        <CardTitle>Topology Visualizer</CardTitle>
+                        <CardDescription>
+                             Co-occurrence calculated by <code>networkx.spring_layout</code> in the Gemini Sandbox.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 p-0 relative overflow-hidden bg-black/5 dark:bg-black/20">
+                        {loadingGraph && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-20 backdrop-blur-sm">
+                                <div className="flex flex-col items-center gap-4">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                                    <p className="font-mono text-sm text-muted-foreground animate-pulse text-center">
+                                        &gt; python_sandbox_executing...<br/>
+                                        &gt; calculating_layout_vectors...
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {graphData ? (
+                            <KnowledgeGraph data={graphData} />
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-4">
+                                <Network className="h-16 w-16 opacity-20" />
+                                <div className="text-center max-w-sm">
+                                    <p>No graph generated.</p>
+                                    <p className="text-xs mt-1 opacity-70">Click "Build Graph" to run the Neuro-Symbolic Loop.</p>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader><CardTitle>Top Cleavages</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                            {Object.entries(datasetState.cleavages)
+                                .sort(([,a], [,b]) => (b as number) - (a as number))
+                                .slice(0,5)
+                                .map(([key, val]) => (
+                                    <div key={key} className="flex justify-between items-center text-sm border-b pb-2 last:border-0">
+                                        <span className="capitalize text-muted-foreground">{key.replace('cleavage_', '').replace(/_/g, ' ')}</span>
+                                        <span className="font-mono font-bold text-primary">{val as number}</span>
+                                    </div>
+                                ))
+                            }
+                        </CardContent>
+                    </Card>
+                    
+                    <Card>
+                        <CardHeader><CardTitle>Top Tactics</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                            {Object.entries(datasetState.tactics)
+                                .sort(([,a], [,b]) => (b as number) - (a as number))
+                                .slice(0,5)
+                                .map(([key, val]) => (
+                                    <div key={key} className="flex justify-between items-center text-sm border-b pb-2 last:border-0">
+                                        <span className="capitalize text-muted-foreground">{key.replace('tactic_', '').replace(/_/g, ' ')}</span>
+                                        <span className="font-mono font-bold text-foreground">{val as number}</span>
+                                    </div>
+                                ))
+                            }
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     );
-};
-
-const ExportData: React.FC = () => {
-    const [isExporting, setIsExporting] = useState(false);
-
-    const handleExport = async () => {
-        setIsExporting(true);
-        try {
-            const feedbackLog = await db.feedbackLog.toArray();
-            if (feedbackLog.length === 0) {
-                alert("There is no annotation data to export.");
-                return;
-            }
-
-            // Export finalized annotations as a JSON array
-            const annotationsToExport = feedbackLog.map(entry => entry.correctedAnnotation);
-            const jsonContent = JSON.stringify(annotationsToExport, null, 2);
-            
-            const blob = new Blob([jsonContent], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = `magdalenka_annotations_${timestamp}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-        } catch (err) {
-            console.error("Failed to export data:", err);
-            alert("An error occurred while exporting the data.");
-        } finally {
-            setIsExporting(false);
-        }
-    };
-    
-    return (
-        <div className="mt-8 p-6 bg-white dark:bg-slate-800/50 rounded-lg shadow-sm border dark:border-slate-700">
-            <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">Export Annotations</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                Download the entire annotated dataset as a .json file.
-            </p>
-            <button
-                onClick={handleExport}
-                disabled={isExporting}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-400 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
-            >
-                {isExporting && (
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                )}
-                {isExporting ? 'Exporting...' : 'Export to .json'}
-            </button>
-        </div>
-    );
-};
-
-const ResetAppState: React.FC = () => {
-    const [isResetting, setIsResetting] = useState(false);
-    
-    const handleReset = async () => {
-      if (window.confirm("Are you sure you want to reset all application data? This will clear all queues, the document archive, and the dataset state. This action cannot be undone.")) {
-        setIsResetting(true);
-        try {
-          await Promise.all([
-            db.chunks.clear(),
-            db.dataset.clear(),
-            db.feedbackLog.clear(),
-            db.drafts.clear(),
-            db.curationQueue.clear(),
-            db.verificationQueue.clear(),
-          ]);
-          window.location.reload();
-        } catch (error) {
-          console.error("Failed to reset application state:", error);
-          alert("An error occurred while resetting the application. Check the console for details.");
-          setIsResetting(false);
-        }
-      }
-    };
-  
-    return (
-      <div className="mt-8 p-6 bg-rose-50 dark:bg-rose-900/30 rounded-lg shadow-sm border border-rose-200 dark:border-rose-500/50">
-          <h3 className="text-xl font-semibold mb-2 text-rose-900 dark:text-rose-200">System Utilities</h3>
-          <p className="text-sm text-rose-700 dark:text-rose-300 mb-4">
-              Advanced actions for managing the application state. Use with caution.
-          </p>
-          <button
-              onClick={handleReset}
-              disabled={isResetting}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-rose-600 hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-800 disabled:cursor-not-allowed"
-          >
-              {isResetting && (
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              )}
-              {isResetting ? 'Resetting...' : 'Reset Application State'}
-          </button>
-      </div>
-    );
-  };
-
-
-interface DashboardViewProps {
-  datasetState: DatasetState;
-  onDatasetUpload: (annotations: Annotation[]) => void;
 }
-
-const DashboardView: React.FC<DashboardViewProps> = ({ datasetState, onDatasetUpload }) => {
-  const totalCleavages = Object.values(datasetState.cleavages).reduce((sum: number, count: number) => sum + count, 0);
-  const totalTactics = Object.values(datasetState.tactics).reduce((sum: number, count: number) => sum + count, 0);
-  const totalEmotions = Object.values(datasetState.emotions).reduce((sum: number, count: number) => sum + count, 0);
-
-  return (
-    <section className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dataset Dashboard</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          A visual summary of the dataset's composition.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Annotations" 
-          value={datasetState.total_annotations_processed}
-          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-        />
-        <StatCard 
-          title="Cleavage Activations" 
-          value={totalCleavages}
-          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-          </svg>}
-        />
-        <StatCard 
-          title="Tactics Identified" 
-          value={totalTactics}
-          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286zm0 13.036h.008v.008h-.008v-.008z" />
-          </svg>}
-        />
-        <StatCard 
-          title="Emotions Fueled" 
-          value={totalEmotions}
-          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 9.75h.008v.008H9v-.008zm6 0h.008v.008H15v-.008z" />
-          </svg>}
-        />
-      </div>
-      
-      <div className="space-y-8">
-        <Chart title="Cleavages" data={datasetState.cleavages} color="bg-rose-500" />
-        <Chart title="Tactics" data={datasetState.tactics} color="bg-blue-500" />
-        <Chart title="Emotions" data={datasetState.emotions} color="bg-amber-500" />
-      </div>
-
-      <AdvancedAnalysis />
-      <DatasetUploader onUpload={onDatasetUpload} />
-      <ExportData />
-      <ResetAppState />
-    </section>
-  );
-};
-
-export default DashboardView;
