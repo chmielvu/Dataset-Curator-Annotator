@@ -31,7 +31,7 @@ import { ZodError } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiAdapter } from '../infrastructure/GeminiAdapter';
 
-// Instantiate Adapter for single-shot checks (UI Layer consumption)
+// Instantiate Adapter for single-shot checks
 const aiService = new GeminiAdapter();
 
 export default function AnnotatorView() {

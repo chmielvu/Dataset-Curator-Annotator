@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import { GeminiAdapter } from '../infrastructure/GeminiAdapter';
 import { DexieRepository } from '../infrastructure/DexieRepository';
 import { WorkflowEngine } from '../application/WorkflowEngine';
-import { getTacticId, getEmotionId } from '../utils/codex';
 import { CLEAVAGE_IDS } from '../utils/constants';
+import { getTacticId, getEmotionId } from '../utils/codex';
 
 // --- DEPENDENCY INJECTION ---
 const aiService = new GeminiAdapter();
@@ -179,11 +179,36 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!item) return;
 
         try {
-            await workflowEngine.verifyAndLearn(item, finalAnnotation, qcFeedback);
+            await repository.logFeedback({
+                timestamp: new Date().toISOString(),
+                postText: item.postText,
+                originalAnnotation: item.annotation,
+                correctedAnnotation: finalAnnotation,
+                qcFeedback
+            });
+
+            // Update Stats locally or via repo
+            const currentState = get().datasetState;
+            const newState: DatasetState = JSON.parse(JSON.stringify(currentState));
+            newState.total_annotations_processed += 1;
             
-            // Re-sync local state manually since we are outside React component tree
-            const stats = await repository.getDatasetState();
-            set({ datasetState: stats });
+            // Clean logic for stats update (Moved from component to store/service)
+            CLEAVAGE_IDS.forEach((cleavageId, idx) => {
+                 if (finalAnnotation.labels.length > idx && finalAnnotation.labels[idx] > 0.5) {
+                    newState.cleavages[cleavageId] = (newState.cleavages[cleavageId] || 0) + 1;
+                 }
+            });
+
+            finalAnnotation.tactics.forEach(tacticName => {
+                const tacticId = getTacticId(tacticName);
+                if (tacticId) newState.tactics[tacticId] = (newState.tactics[tacticId] || 0) + 1;
+            });
+            
+            const emotionId = getEmotionId(finalAnnotation.emotion_fuel);
+            if (emotionId) newState.emotions[emotionId] = (newState.emotions[emotionId] || 0) + 1;
+            
+            await repository.updateDatasetState(newState);
+            set({ datasetState: newState });
 
             toast.success("Verified");
             await get().loadNextVerificationItem();
