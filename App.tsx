@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from './store/useAppStore';
-import { Search, Terminal, ShieldCheck, LayoutDashboard, Database, Moon, Sun, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
+import { Search, Terminal, ShieldCheck, LayoutDashboard, Database, Moon, Sun, Loader2, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import CuratorView from './components/CuratorView';
 import AnnotatorView from './components/AnnotatorView';
 import VerificationView from './components/VerificationView';
@@ -8,6 +8,8 @@ import DashboardView from './components/DashboardView';
 import CorpusView from './components/CorpusView';
 import { Button } from './components/ui/button';
 import { cn } from './lib/utils';
+import { db } from './lib/dexie';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const SidebarItem = ({ view, icon: Icon, label, count }: any) => {
     const { currentView, setView } = useAppStore();
@@ -37,33 +39,127 @@ const SidebarItem = ({ view, icon: Icon, label, count }: any) => {
 export default function App() {
     const { initializeData, queueCounts, theme, toggleTheme, currentView, isInitialized } = useAppStore();
     const [isSlowLoading, setIsSlowLoading] = useState(false);
+    const [isFatalError, setIsFatalError] = useState(false);
+    const [errorDetails, setErrorDetails] = useState<string>('');
+    const [loadingMessage, setLoadingMessage] = useState("Initializing SOTA Pipeline...");
 
     useEffect(() => {
-        initializeData();
+        const init = async () => {
+            try {
+                await initializeData();
+            } catch (e: any) {
+                console.error("FATAL INIT ERROR:", e);
+                setIsFatalError(true);
+                setErrorDetails(e.message || "Unknown initialization error");
+            }
+        };
+        init();
+        
         // Set initial theme class
         document.documentElement.classList.add('dark');
     }, []);
 
+    // Cycle loading messages to show activity
+    useEffect(() => {
+        if (isInitialized) return;
+        
+        const messages = [
+            "Initializing SOTA Pipeline...",
+            "Connecting to Local Vector Database...",
+            "Verifying Agent Schemas...",
+            "Loading Knowledge Graph Engine...",
+            "Warming up Gemini 3 Pro..."
+        ];
+        
+        let i = 0;
+        const interval = setInterval(() => {
+            i = (i + 1) % messages.length;
+            setLoadingMessage(messages[i]);
+        }, 1200);
+        
+        return () => clearInterval(interval);
+    }, [isInitialized]);
+
     useEffect(() => {
         let timeoutId: ReturnType<typeof setTimeout>;
-        if (!isInitialized) {
+        if (!isInitialized && !isFatalError) {
             timeoutId = setTimeout(() => {
                 setIsSlowLoading(true);
-            }, 3000); // Show message if loading takes longer than 3s
+            }, 5000); // Show message if loading takes longer than 5s
         }
         return () => clearTimeout(timeoutId);
-    }, [isInitialized]);
+    }, [isInitialized, isFatalError]);
+
+    const handleHardReset = async () => {
+        if (confirm("This will DELETE ALL LOCAL DATA (database and settings) and reload the app. Are you sure?")) {
+            try {
+                await db.deleteDatabase();
+                window.location.reload();
+            } catch (e) {
+                alert("Failed to delete database. Please clear browser data manually.");
+            }
+        }
+    };
+
+    if (isFatalError) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-background text-foreground flex-col gap-6 p-8 text-center">
+                <div className="p-4 rounded-full bg-destructive/10 text-destructive">
+                    <AlertTriangle className="h-12 w-12" />
+                </div>
+                <div className="space-y-2 max-w-md">
+                    <h1 className="text-2xl font-bold tracking-tight">System Failure</h1>
+                    <p className="text-muted-foreground">The application failed to initialize. This is likely due to a database version mismatch or corrupted local data.</p>
+                    <p className="text-xs font-mono bg-muted p-2 rounded text-left overflow-x-auto border border-border">
+                        Error: {errorDetails}
+                    </p>
+                </div>
+                <div className="flex gap-4">
+                    <Button variant="outline" onClick={() => window.location.reload()}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Try Reloading
+                    </Button>
+                    <Button variant="destructive" onClick={handleHardReset}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Hard Reset (Clear Data)
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     if (!isInitialized) {
         return (
-            <div className="flex h-screen w-full items-center justify-center bg-background text-foreground flex-col gap-4">
-                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                 <p className="text-muted-foreground font-mono text-sm animate-pulse">Initializing SOTA Pipeline...</p>
+            <div className="flex h-screen w-full items-center justify-center bg-background text-foreground flex-col gap-6">
+                 <div className="relative">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <div className="absolute inset-0 blur-xl bg-primary/20 rounded-full animate-pulse" />
+                 </div>
+                 
+                 <div className="h-6 flex items-center justify-center">
+                    <AnimatePresence mode="wait">
+                        <motion.p 
+                            key={loadingMessage}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -5 }}
+                            className="text-muted-foreground font-mono text-sm"
+                        >
+                            {loadingMessage}
+                        </motion.p>
+                    </AnimatePresence>
+                 </div>
+
                  {isSlowLoading && (
-                     <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-4 py-2 rounded-md animate-in fade-in slide-in-from-bottom-2">
-                         <AlertTriangle className="h-4 w-4" />
-                         <span className="text-xs">Loading large dataset... please wait.</span>
-                     </div>
+                     <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex items-center gap-3 text-amber-500 bg-amber-500/10 px-6 py-3 rounded-lg border border-amber-500/20 max-w-xs"
+                     >
+                         <AlertTriangle className="h-5 w-5 shrink-0" />
+                         <div className="flex flex-col items-start text-left">
+                             <span className="text-sm font-bold">Taking longer than usual...</span>
+                             <span className="text-xs opacity-80">This can happen during large database migrations or on slower devices. Please wait.</span>
+                         </div>
+                     </motion.div>
                  )}
             </div>
         );
