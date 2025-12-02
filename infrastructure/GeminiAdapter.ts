@@ -156,9 +156,9 @@ export class GeminiAdapter implements IAIService {
             });
             
             let jsonString = "";
-            const executablePart = result.candidates?.[0]?.content?.parts?.find(p => p.executableCodeResult);
-            if (executablePart?.executableCodeResult?.outcome === 'OUTCOME_OK') {
-                 jsonString = executablePart.executableCodeResult.output || "";
+            const executablePart = result.candidates?.[0]?.content?.parts?.find(p => p.codeExecutionResult);
+            if (executablePart?.codeExecutionResult?.outcome === 'OUTCOME_OK') {
+                 jsonString = executablePart.codeExecutionResult.output || "";
             } else {
                  jsonString = result.text || "";
             }

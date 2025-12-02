@@ -46,13 +46,15 @@ export class WorkflowEngine {
         }
     }
 
-    // --- Verification Logic ---
-    async verifyAndLearn(item: { postText: string, annotation: Annotation }, finalAnnotation: Annotation, qcFeedback: string): Promise<DatasetState> {
-        // 1. Log Feedback
-        await this.repository.logFeedback({
+    // --- Verification & Learning Logic ---
+    
+    // Core function to update state based on a verified/corrected annotation
+    private async processVerifiedAnnotation(postText: string, originalAnnotation: Annotation, finalAnnotation: Annotation, qcFeedback: string): Promise<DatasetState> {
+         // 1. Log Feedback
+         await this.repository.logFeedback({
             timestamp: new Date().toISOString(),
-            postText: item.postText,
-            originalAnnotation: item.annotation,
+            postText: postText,
+            originalAnnotation: originalAnnotation,
             correctedAnnotation: finalAnnotation,
             qcFeedback
         });
@@ -69,12 +71,19 @@ export class WorkflowEngine {
                 newState.cleavages[cleavageId] = (newState.cleavages[cleavageId] || 0) + 1;
              }
         });
-
-        // Tactic and Emotion stats would be updated here similarly based on IDs
-        // For simplicity in this refactor, we assume the UI visualizes raw counts or derived data
         
         // 3. Persist State
         await this.repository.updateDatasetState(newState);
         return newState;
+    }
+
+    async verifyAndLearn(item: { postText: string, annotation: Annotation }, finalAnnotation: Annotation, qcFeedback: string): Promise<DatasetState> {
+        return this.processVerifiedAnnotation(item.postText, item.annotation, finalAnnotation, qcFeedback);
+    }
+    
+    async submitManualAnnotation(postText: string, annotation: Annotation, qcFeedback: string): Promise<DatasetState> {
+        // For manual annotations, the "original" is the same as the final if no AI was involved, 
+        // or we can treat the manual input as the ground truth.
+        return this.processVerifiedAnnotation(postText, annotation, annotation, qcFeedback);
     }
 }

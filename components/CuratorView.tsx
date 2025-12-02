@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import SwarmVisualizer from './SwarmVisualizer';
@@ -6,20 +7,22 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Play, Square } from 'lucide-react';
-import { db } from '../lib/dexie';
 import { toast } from 'sonner';
 
 export default function CuratorView() {
-    const { curationJob, startCurationJob, stopCurationJob, lastSwarmReport, curationLog, initializeData } = useAppStore();
+    const { curationJob, startCurationJob, stopCurationJob, lastSwarmReport, curationLog, addToCurationQueue } = useAppStore();
     const [batches, setBatches] = useState(3);
     const [query, setQuery] = useState('');
 
     const handleManualAdd = async () => {
         if (!query.trim()) return;
-        await db.addPostsToQueue([query]);
-        toast.success("Manual post added to queue");
-        setQuery('');
-        initializeData();
+        try {
+            await addToCurationQueue(query);
+            toast.success("Manual post added to queue");
+            setQuery('');
+        } catch (e) {
+            toast.error("Failed to add post");
+        }
     };
 
     return (

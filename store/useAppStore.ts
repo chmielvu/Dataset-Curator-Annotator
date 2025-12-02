@@ -6,8 +6,6 @@ import { toast } from 'sonner';
 import { GeminiAdapter } from '../infrastructure/GeminiAdapter';
 import { DexieRepository } from '../infrastructure/DexieRepository';
 import { WorkflowEngine } from '../application/WorkflowEngine';
-import { getTacticId, getEmotionId } from '../utils/codex';
-import { CLEAVAGE_IDS } from '../utils/constants';
 
 // --- DEPENDENCY INJECTION ---
 const aiService = new GeminiAdapter();
@@ -38,6 +36,10 @@ interface AppState {
     loadNextVerificationItem: () => Promise<void>;
     submitVerification: (finalAnnotation: Annotation, wasEdited: boolean, qcFeedback: string) => Promise<void>;
     skipVerificationItem: () => Promise<void>;
+    
+    // New Actions for Manual Operations
+    addToCurationQueue: (postText: string) => Promise<void>;
+    submitManualAnnotation: (postText: string, annotation: Annotation, qcFeedback: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -76,6 +78,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             console.error("Init failed:", e);
             set({ isInitialized: true });
         }
+    },
+
+    addToCurationQueue: async (postText: string) => {
+        await repository.enqueuePosts([postText]);
+        await get().initializeData();
     },
 
     startCurationJob: async (batchesToRun, manualQuery) => {
@@ -181,7 +188,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
             await workflowEngine.verifyAndLearn(item, finalAnnotation, qcFeedback);
             
-            // Re-sync local state manually since we are outside React component tree
+            // Re-sync local state manually
             const stats = await repository.getDatasetState();
             set({ datasetState: stats });
 
@@ -190,6 +197,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         } catch (e) {
             console.error(e);
             toast.error("Failed to save verification");
+        }
+    },
+    
+    submitManualAnnotation: async (postText, annotation, qcFeedback) => {
+        try {
+            await workflowEngine.submitManualAnnotation(postText, annotation, qcFeedback);
+            const stats = await repository.getDatasetState();
+            set({ datasetState: stats });
+            toast.success("Feedback Saved");
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to save annotation");
         }
     },
 
